@@ -1,0 +1,51 @@
+---
+import Layout from '../../components/Layout.astro';
+import GeoTag from '../../components/GeoTag.astro';
+import TrafficTag from '../../components/TrafficTag.astro';
+import { supabase } from '../../lib/supabase';
+import type { Buyer } from '../../lib/types';
+
+const { data: buyers } = await supabase
+  .from('buyers')
+  .select('*')
+  .order('created_at', { ascending: false });
+---
+
+<Layout title="Buyers">
+  <div class="flex items-center justify-between mb-8">
+    <div>
+      <h1 class="text-2xl font-bold">Buyers</h1>
+      <p class="text-gray-500 text-sm mt-1">Media buyers in your network</p>
+    </div>
+    <a href="/buyers/add" class="bg-accent hover:bg-indigo-600 text-white text-sm font-medium px-5 py-2.5 rounded-lg transition-colors">+ Add Buyer</a>
+  </div>
+
+  {(!buyers || buyers.length === 0) ? (
+    <div class="bg-card rounded-xl border border-gray-800 p-12 text-center">
+      <p class="text-gray-500">No buyers yet.</p>
+      <a href="/buyers/add" class="text-accent hover:underline text-sm mt-2 inline-block">Add your first buyer</a>
+    </div>
+  ) : (
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+      {(buyers as Buyer[]).map(buyer => (
+        <a href={`/buyers/${buyer.id}`} class="bg-card rounded-xl border border-gray-800 p-6 hover:border-gray-700 transition-colors block">
+          <div class="flex items-start justify-between mb-3">
+            <div>
+              <h3 class="font-semibold">{buyer.name}</h3>
+              {buyer.contact_name && <p class="text-gray-500 text-xs">{buyer.contact_name}</p>}
+            </div>
+            <span class="text-xs font-mono bg-gray-800 px-2 py-1 rounded text-gray-400">
+              ${Number(buyer.monthly_budget_capacity).toLocaleString()}
+            </span>
+          </div>
+          <div class="flex flex-wrap gap-1 mb-2">
+            {buyer.geo_expertise.map(g => <GeoTag code={g} />)}
+          </div>
+          <div class="flex flex-wrap gap-1">
+            {buyer.traffic_types.map(t => <TrafficTag type={t} />)}
+          </div>
+        </a>
+      ))}
+    </div>
+  )}
+</Layout>

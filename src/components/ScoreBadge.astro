@@ -1,0 +1,15 @@
+---
+interface Props {
+  score: number;
+}
+
+const { score } = Astro.props;
+
+const color = score >= 60 ? 'text-success bg-success/20'
+            : score >= 30 ? 'text-warning bg-warning/20'
+            : 'text-danger bg-danger/20';
+---
+
+<span class={`inline-block text-xs font-bold px-2.5 py-1 rounded-full ${color}`}>
+  {score}%
+</span>

@@ -1,0 +1,224 @@
+---
+import Layout from '../../components/Layout.astro';
+import { supabase } from '../../lib/supabase';
+import { calculateEconomics } from '../../lib/unit-economics';
+
+const url = Astro.url;
+const matchId = url.searchParams.get('match_id');
+const buyerId = url.searchParams.get('buyer_id');
+const operatorId = url.searchParams.get('operator_id');
+
+let prefill = { cpa_payout: 0, revshare_pct: 0, buyerName: '', operatorName: '' };
+
+if (operatorId) {
+  const { data: op } = await supabase.from('operators').select('*').eq('id', operatorId).single();
+  if (op) {
+    prefill.cpa_payout = op.cpa_value || 0;
+    prefill.revshare_pct = op.revshare_pct || 0;
+    prefill.operatorName = op.name;
+  }
+}
+if (buyerId) {
+  const { data: b } = await supabase.from('buyers').select('name').eq('id', buyerId).single();
+  if (b) prefill.buyerName = b.name;
+}
+
+let savedMessage = '';
+
+if (Astro.request.method === 'POST') {
+  const form = await Astro.request.formData();
+
+  const inputs = {
+    planned_spend: Number(form.get('planned_spend')) || 0,
+    expected_conversions: Number(form.get('expected_conversions')) || 0,
+    avg_revenue_per_user: Number(form.get('avg_revenue_per_user')) || 0,
+    cpa_payout: Number(form.get('cpa_payout')) || 0,
+    revshare_pct: Number(form.get('revshare_pct')) || 0,
+  };
+
+  const results = calculateEconomics(inputs);
+
+  const { error } = await supabase.from('projects').insert({
+    name: (form.get('project_name') as string) || 'Untitled Project',
+    match_id: matchId || null,
+    buyer_id: buyerId || null,
+    operator_id: operatorId || null,
+    planned_spend: inputs.planned_spend,
+    expected_conversions: inputs.expected_conversions,
+    avg_revenue_per_user: inputs.avg_revenue_per_user,
+    cpa_payout: inputs.cpa_payout,
+    revshare_pct: inputs.revshare_pct,
+    calc_cpa: results.effective_cpa,
+    calc_ltv: results.ltv,
+    calc_roi: results.roi,
+    calc_breakeven: results.breakeven_conversions,
+  });
+
+  if (!error) savedMessage = 'Project saved successfully!';
+}
+---
+
+<Layout title="Unit Economics Calculator">
+  <div class="mb-8">
+    <h1 class="text-2xl font-bold">Unit Economics Calculator</h1>
+    <p class="text-gray-500 text-sm mt-1">
+      Calculate ROI before launching a project
+      {prefill.buyerName && prefill.operatorName && (
+        <span> — {prefill.buyerName} ↔ {prefill.operatorName}</span>
+      )}
+    </p>
+  </div>
+
+  {savedMessage && (
+    <div class="bg-success/10 text-success border border-success/20 rounded-lg px-4 py-3 mb-6 text-sm">
+      {savedMessage}
+    </div>
+  )}
+
+  <div class="grid grid-cols-2 gap-6">
+    <div class="bg-card rounded-xl border border-gray-800 p-6">
+      <h2 class="text-lg font-semibold mb-5">Inputs</h2>
+
+      <form method="POST" id="calcForm" class="space-y-4">
+        <div>
+          <label class="block text-sm text-gray-400 mb-1">Project Name</label>
+          <input type="text" name="project_name" placeholder="e.g. DE Casino Push Campaign"
+            class="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2 text-gray-100 focus:border-accent focus:ring-1 focus:ring-accent outline-none" />
+        </div>
+
+        <div>
+          <label class="block text-sm text-gray-400 mb-1">Planned Spend (USD)</label>
+          <input type="number" name="planned_spend" id="planned_spend" step="0.01" min="0" value="10000"
+            class="calc-input w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2 text-gray-100 focus:border-accent focus:ring-1 focus:ring-accent outline-none" />
+        </div>
+
+        <div>
+          <label class="block text-sm text-gray-400 mb-1">Expected Conversions (FTDs)</label>
+          <input type="number" name="expected_conversions" id="expected_conversions" min="0" value="200"
+            class="calc-input w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2 text-gray-100 focus:border-accent focus:ring-1 focus:ring-accent outline-none" />
+        </div>
+
+        <div>
+          <label class="block text-sm text-gray-400 mb-1">Avg Revenue per User (ARPU/LTV)</label>
+          <input type="number" name="avg_revenue_per_user" id="avg_revenue_per_user" step="0.01" min="0" value="150"
+            class="calc-input w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2 text-gray-100 focus:border-accent focus:ring-1 focus:ring-accent outline-none" />
+        </div>
+
+        <div>
+          <label class="block text-sm text-gray-400 mb-1">CPA Payout (USD per conversion)</label>
+          <input type="number" name="cpa_payout" id="cpa_payout" step="0.01" min="0" value={prefill.cpa_payout || 50}
+            class="calc-input w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2 text-gray-100 focus:border-accent focus:ring-1 focus:ring-accent outline-none" />
+        </div>
+
+        <div>
+          <label class="block text-sm text-gray-400 mb-1">RevShare %</label>
+          <input type="number" name="revshare_pct" id="revshare_pct" step="0.01" min="0" max="100" value={prefill.revshare_pct || 0}
+            class="calc-input w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2 text-gray-100 focus:border-accent focus:ring-1 focus:ring-accent outline-none" />
+        </div>
+
+        <button type="submit" class="bg-accent hover:bg-indigo-600 text-white font-medium px-6 py-2.5 rounded-lg transition-colors w-full">
+          Save as Project
+        </button>
+      </form>
+    </div>
+
+    <div>
+      <div class="bg-card rounded-xl border border-gray-800 p-6 sticky top-8">
+        <h2 class="text-lg font-semibold mb-5">Results</h2>
+
+        <div class="space-y-4">
+          <div class="flex justify-between items-center p-3 bg-gray-800/30 rounded-lg">
+            <span class="text-sm text-gray-400">Effective CPA</span>
+            <span class="font-mono font-bold" id="r_cpa">$0.00</span>
+          </div>
+
+          <div class="flex justify-between items-center p-3 bg-gray-800/30 rounded-lg">
+            <span class="text-sm text-gray-400">LTV (ARPU)</span>
+            <span class="font-mono font-bold" id="r_ltv">$0.00</span>
+          </div>
+
+          <div class="flex justify-between items-center p-3 bg-gray-800/30 rounded-lg">
+            <span class="text-sm text-gray-400">Gross Revenue</span>
+            <span class="font-mono font-bold" id="r_revenue">$0.00</span>
+          </div>
+
+          <div class="flex justify-between items-center p-3 bg-gray-800/30 rounded-lg">
+            <span class="text-sm text-gray-400">Profit</span>
+            <span class="font-mono font-bold" id="r_profit">$0.00</span>
+          </div>
+
+          <div class="flex justify-between items-center p-4 rounded-lg border-2" id="roi_box">
+            <span class="text-sm font-medium">ROI</span>
+            <span class="font-mono text-2xl font-bold" id="r_roi">0.00%</span>
+          </div>
+
+          <div class="flex justify-between items-center p-3 bg-gray-800/30 rounded-lg">
+            <span class="text-sm text-gray-400">Break-even Conversions</span>
+            <span class="font-mono font-bold" id="r_breakeven">0</span>
+          </div>
+
+          <div class="mt-4">
+            <div class="text-xs text-gray-500 mb-1 flex justify-between">
+              <span>Break-even progress</span>
+              <span id="r_progress_label">0%</span>
+            </div>
+            <div class="w-full bg-gray-800 rounded-full h-3">
+              <div class="h-3 rounded-full transition-all duration-300" id="r_bar" style="width: 0%; background-color: #ef4444;"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    function calculate() {
+      const spend = Number((document.getElementById('planned_spend') as HTMLInputElement).value) || 0;
+      const convs = Number((document.getElementById('expected_conversions') as HTMLInputElement).value) || 0;
+      const arpu = Number((document.getElementById('avg_revenue_per_user') as HTMLInputElement).value) || 0;
+      const cpa = Number((document.getElementById('cpa_payout') as HTMLInputElement).value) || 0;
+      const revshare = Number((document.getElementById('revshare_pct') as HTMLInputElement).value) || 0;
+
+      const effectiveCpa = convs > 0 ? spend / convs : 0;
+      const revenuePerConv = cpa + (arpu * revshare / 100);
+      const grossRevenue = convs * revenuePerConv;
+      const profit = grossRevenue - spend;
+      const roi = spend > 0 ? (profit / spend) * 100 : 0;
+      const breakeven = revenuePerConv > 0 ? Math.ceil(spend / revenuePerConv) : 0;
+
+      const fmt = (n: number) => n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+      document.getElementById('r_cpa')!.textContent = `$${fmt(effectiveCpa)}`;
+      document.getElementById('r_ltv')!.textContent = `$${fmt(arpu)}`;
+      document.getElementById('r_revenue')!.textContent = `$${fmt(grossRevenue)}`;
+      document.getElementById('r_profit')!.textContent = `$${fmt(profit)}`;
+      document.getElementById('r_roi')!.textContent = `${fmt(roi)}%`;
+      document.getElementById('r_breakeven')!.textContent = String(breakeven);
+
+      const profitEl = document.getElementById('r_profit')!;
+      profitEl.className = `font-mono font-bold ${profit >= 0 ? 'text-success' : 'text-danger'}`;
+
+      const roiBox = document.getElementById('roi_box')!;
+      const roiEl = document.getElementById('r_roi')!;
+      if (roi >= 0) {
+        roiBox.className = 'flex justify-between items-center p-4 rounded-lg border-2 border-success/30 bg-success/5';
+        roiEl.className = 'font-mono text-2xl font-bold text-success';
+      } else {
+        roiBox.className = 'flex justify-between items-center p-4 rounded-lg border-2 border-danger/30 bg-danger/5';
+        roiEl.className = 'font-mono text-2xl font-bold text-danger';
+      }
+
+      const progress = breakeven > 0 ? Math.min((convs / breakeven) * 100, 100) : 0;
+      const bar = document.getElementById('r_bar') as HTMLElement;
+      bar.style.width = `${progress}%`;
+      bar.style.backgroundColor = progress >= 100 ? '#22c55e' : progress >= 50 ? '#f59e0b' : '#ef4444';
+      document.getElementById('r_progress_label')!.textContent = `${Math.round(progress)}%`;
+    }
+
+    document.querySelectorAll('.calc-input').forEach(el => {
+      el.addEventListener('input', calculate);
+    });
+
+    calculate();
+  </script>
+</Layout>

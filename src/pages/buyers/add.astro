@@ -1,0 +1,94 @@
+---
+import Layout from '../../components/Layout.astro';
+
+const trafficOptions = ['PPC', 'SEO', 'Social', 'Push', 'Native', 'Email', 'Display', 'Streaming'];
+
+if (Astro.request.method === 'POST') {
+  const { supabase } = await import('../../lib/supabase');
+  const form = await Astro.request.formData();
+
+  const geoRaw = (form.get('geo_expertise') as string) || '';
+  const geo = geoRaw.split(',').map(g => g.trim().toUpperCase()).filter(Boolean);
+  const traffic = trafficOptions.filter(t => form.get(`traffic_${t}`));
+
+  const { error } = await supabase.from('buyers').insert({
+    name: form.get('name') as string,
+    contact_name: (form.get('contact_name') as string) || null,
+    contact_email: (form.get('contact_email') as string) || null,
+    contact_telegram: (form.get('contact_telegram') as string) || null,
+    geo_expertise: geo,
+    traffic_types: traffic,
+    monthly_budget_capacity: Number(form.get('monthly_budget_capacity')) || 0,
+    notes: (form.get('notes') as string) || null,
+  });
+
+  if (!error) return Astro.redirect('/buyers');
+}
+---
+
+<Layout title="Add Buyer">
+  <div class="mb-8">
+    <a href="/buyers" class="text-gray-500 hover:text-gray-300 text-sm">&larr; Back to Buyers</a>
+    <h1 class="text-2xl font-bold mt-2">Add Buyer</h1>
+  </div>
+
+  <form method="POST" class="bg-card rounded-xl border border-gray-800 p-6 max-w-2xl space-y-5">
+    <div>
+      <label class="block text-sm text-gray-400 mb-1">Name *</label>
+      <input type="text" name="name" required
+        class="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2 text-gray-100 focus:border-accent focus:ring-1 focus:ring-accent outline-none" />
+    </div>
+
+    <div class="grid grid-cols-3 gap-4">
+      <div>
+        <label class="block text-sm text-gray-400 mb-1">Contact Name</label>
+        <input type="text" name="contact_name"
+          class="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2 text-gray-100 focus:border-accent focus:ring-1 focus:ring-accent outline-none" />
+      </div>
+      <div>
+        <label class="block text-sm text-gray-400 mb-1">Email</label>
+        <input type="email" name="contact_email"
+          class="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2 text-gray-100 focus:border-accent focus:ring-1 focus:ring-accent outline-none" />
+      </div>
+      <div>
+        <label class="block text-sm text-gray-400 mb-1">Telegram</label>
+        <input type="text" name="contact_telegram" placeholder="@username"
+          class="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2 text-gray-100 focus:border-accent focus:ring-1 focus:ring-accent outline-none" />
+      </div>
+    </div>
+
+    <div>
+      <label class="block text-sm text-gray-400 mb-1">GEO Expertise (comma-separated country codes)</label>
+      <input type="text" name="geo_expertise" placeholder="DE, BR, IN, US"
+        class="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2 text-gray-100 focus:border-accent focus:ring-1 focus:ring-accent outline-none" />
+    </div>
+
+    <div>
+      <label class="block text-sm text-gray-400 mb-2">Traffic Types</label>
+      <div class="flex flex-wrap gap-3">
+        {trafficOptions.map(t => (
+          <label class="flex items-center gap-2 text-sm text-gray-300 cursor-pointer">
+            <input type="checkbox" name={`traffic_${t}`} class="rounded bg-gray-800 border-gray-700 text-accent focus:ring-accent" />
+            {t}
+          </label>
+        ))}
+      </div>
+    </div>
+
+    <div>
+      <label class="block text-sm text-gray-400 mb-1">Monthly Budget Capacity (USD)</label>
+      <input type="number" name="monthly_budget_capacity" step="0.01" min="0" placeholder="50000"
+        class="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2 text-gray-100 focus:border-accent focus:ring-1 focus:ring-accent outline-none" />
+    </div>
+
+    <div>
+      <label class="block text-sm text-gray-400 mb-1">Notes</label>
+      <textarea name="notes" rows="3"
+        class="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2 text-gray-100 focus:border-accent focus:ring-1 focus:ring-accent outline-none resize-none"></textarea>
+    </div>
+
+    <button type="submit" class="bg-accent hover:bg-indigo-600 text-white font-medium px-6 py-2.5 rounded-lg transition-colors">
+      Create Buyer
+    </button>
+  </form>
+</Layout>

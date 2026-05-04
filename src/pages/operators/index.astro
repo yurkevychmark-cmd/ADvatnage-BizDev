@@ -1,0 +1,56 @@
+---
+import Layout from '../../components/Layout.astro';
+import GeoTag from '../../components/GeoTag.astro';
+import TrafficTag from '../../components/TrafficTag.astro';
+import { supabase } from '../../lib/supabase';
+import type { Operator } from '../../lib/types';
+
+const { data: operators } = await supabase
+  .from('operators')
+  .select('*')
+  .order('created_at', { ascending: false });
+---
+
+<Layout title="Operators">
+  <div class="flex items-center justify-between mb-8">
+    <div>
+      <h1 class="text-2xl font-bold">Operators</h1>
+      <p class="text-gray-500 text-sm mt-1">Advertisers and casinos available for partnerships</p>
+    </div>
+    <a href="/operators/add" class="bg-accent hover:bg-indigo-600 text-white text-sm font-medium px-5 py-2.5 rounded-lg transition-colors">+ Add Operator</a>
+  </div>
+
+  {(!operators || operators.length === 0) ? (
+    <div class="bg-card rounded-xl border border-gray-800 p-12 text-center">
+      <p class="text-gray-500">No operators yet.</p>
+      <a href="/operators/add" class="text-accent hover:underline text-sm mt-2 inline-block">Add your first operator</a>
+    </div>
+  ) : (
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+      {(operators as Operator[]).map(op => (
+        <a href={`/operators/${op.id}`} class="bg-card rounded-xl border border-gray-800 p-6 hover:border-gray-700 transition-colors block">
+          <div class="flex items-start justify-between mb-3">
+            <div>
+              <h3 class="font-semibold">{op.name}</h3>
+              {op.brand && <p class="text-gray-500 text-xs">{op.brand}</p>}
+            </div>
+            <span class={`text-xs px-2 py-0.5 rounded-full font-medium ${
+              op.deal_type === 'CPA' ? 'bg-success/20 text-success' :
+              op.deal_type === 'RevShare' ? 'bg-accent/20 text-accent' :
+              'bg-warning/20 text-warning'
+            }`}>{op.deal_type}</span>
+          </div>
+          <div class="flex flex-wrap gap-1 mb-2">
+            {op.target_geos.map(g => <GeoTag code={g} />)}
+          </div>
+          <div class="flex flex-wrap gap-1 mb-3">
+            {op.preferred_traffic.map(t => <TrafficTag type={t} />)}
+          </div>
+          <div class="text-xs text-gray-500">
+            Budget: ${Number(op.budget_min).toLocaleString()} – ${Number(op.budget_max).toLocaleString()}
+          </div>
+        </a>
+      ))}
+    </div>
+  )}
+</Layout>

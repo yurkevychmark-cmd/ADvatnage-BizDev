@@ -1,0 +1,174 @@
+---
+import Layout from '../../components/Layout.astro';
+import GeoTag from '../../components/GeoTag.astro';
+import TrafficTag from '../../components/TrafficTag.astro';
+import ScoreBadge from '../../components/ScoreBadge.astro';
+import { supabase } from '../../lib/supabase';
+import { computeMatches } from '../../lib/matchmaking';
+import type { Buyer, Operator } from '../../lib/types';
+
+let message = '';
+
+if (Astro.request.method === 'POST') {
+  const form = await Astro.request.formData();
+  const action = form.get('_action');
+
+  if (action === 'run') {
+    const { data: buyers } = await supabase.from('buyers').select('*');
+    const { data: operators } = await supabase.from('operators').select('*');
+
+    if (buyers && operators && buyers.length > 0 && operators.length > 0) {
+      const results = computeMatches(buyers as Buyer[], operators as Operator[]);
+
+      for (const r of results) {
+        await supabase.from('matches').upsert({
+          buyer_id: r.buyer_id,
+          operator_id: r.operator_id,
+          score: r.score,
+          geo_overlap: r.geo_overlap,
+          traffic_overlap: r.traffic_overlap,
+          budget_fit: r.budget_fit,
+          status: 'suggested',
+        }, { onConflict: 'buyer_id,operator_id' });
+      }
+
+      message = `Generated ${results.length} matches`;
+    } else {
+      message = 'Need at least 1 buyer and 1 operator to run matchmaking';
+    }
+  }
+
+  if (action === 'update_status') {
+    const matchId = form.get('match_id') as string;
+    const status = form.get('status') as string;
+    await supabase.from('matches').update({ status }).eq('id', matchId);
+  }
+
+  if (action === 'delete') {
+    const matchId = form.get('match_id') as string;
+    await supabase.from('matches').delete().eq('id', matchId);
+  }
+}
+
+const { data: matches } = await supabase
+  .from('matches')
+  .select('*, buyer:buyers(*), operator:operators(*)')
+  .order('score', { ascending: false });
+---
+
+<Layout title="Matchmaking">
+  <div class="flex items-center justify-between mb-8">
+    <div>
+      <h1 class="text-2xl font-bold">Matchmaking</h1>
+      <p class="text-gray-500 text-sm mt-1">Find the best buyer-operator pairs</p>
+    </div>
+    <form method="POST">
+      <input type="hidden" name="_action" value="run" />
+      <button type="submit" class="bg-accent hover:bg-indigo-600 text-white text-sm font-medium px-5 py-2.5 rounded-lg transition-colors">
+        Run Matchmaking
+      </button>
+    </form>
+  </div>
+
+  {message && (
+    <div class="bg-accent/10 text-accent border border-accent/20 rounded-lg px-4 py-3 mb-6 text-sm">
+      {message}
+    </div>
+  )}
+
+  {(!matches || matches.length === 0) ? (
+    <div class="bg-card rounded-xl border border-gray-800 p-12 text-center">
+      <p class="text-gray-500 mb-2">No matches yet.</p>
+      <p class="text-gray-600 text-sm">Add buyers and operators, then click "Run Matchmaking".</p>
+    </div>
+  ) : (
+    <div class="space-y-4">
+      {matches.map((m: any) => (
+        <div class="bg-card rounded-xl border border-gray-800 p-6">
+          <div class="flex items-start justify-between">
+            <div class="flex-1">
+              <div class="flex items-center gap-3 mb-3">
+                <ScoreBadge score={m.score} />
+                <div>
+                  <span class="font-semibold">{m.buyer?.name}</span>
+                  <span class="text-gray-500 mx-2">↔</span>
+                  <span class="font-semibold">{m.operator?.name}</span>
+                  {m.operator?.brand && <span class="text-gray-500 text-sm ml-1">({m.operator.brand})</span>}
+                </div>
+                <span class={`text-xs px-2 py-0.5 rounded-full ml-auto ${
+                  m.status === 'active' ? 'bg-success/20 text-success' :
+                  m.status === 'accepted' ? 'bg-accent/20 text-accent' :
+                  m.status === 'rejected' ? 'bg-danger/20 text-danger' :
+                  'bg-gray-700 text-gray-400'
+                }`}>{m.status}</span>
+              </div>
+
+              <div class="grid grid-cols-3 gap-4 text-sm">
+                <div>
+                  <p class="text-gray-500 text-xs mb-1">GEO Overlap</p>
+                  <div class="flex flex-wrap gap-1">
+                    {m.geo_overlap?.length > 0
+                      ? m.geo_overlap.map((g: string) => <GeoTag code={g} />)
+                      : <span class="text-gray-600 text-xs">None</span>
+                    }
+                  </div>
+                </div>
+                <div>
+                  <p class="text-gray-500 text-xs mb-1">Traffic Overlap</p>
+                  <div class="flex flex-wrap gap-1">
+                    {m.traffic_overlap?.length > 0
+                      ? m.traffic_overlap.map((t: string) => <TrafficTag type={t} />)
+                      : <span class="text-gray-600 text-xs">None</span>
+                    }
+                  </div>
+                </div>
+                <div>
+                  <p class="text-gray-500 text-xs mb-1">Budget Fit</p>
+                  <span class={m.budget_fit ? 'text-success text-sm' : 'text-danger text-sm'}>
+                    {m.budget_fit ? 'Yes' : 'No'}
+                  </span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="flex items-center gap-2 mt-4 pt-4 border-t border-gray-800">
+            {m.status !== 'accepted' && m.status !== 'active' && (
+              <form method="POST" class="inline">
+                <input type="hidden" name="_action" value="update_status" />
+                <input type="hidden" name="match_id" value={m.id} />
+                <input type="hidden" name="status" value="accepted" />
+                <button type="submit" class="text-success bg-success/10 hover:bg-success/20 text-xs px-3 py-1.5 rounded-lg transition-colors">Accept</button>
+              </form>
+            )}
+            {m.status !== 'rejected' && (
+              <form method="POST" class="inline">
+                <input type="hidden" name="_action" value="update_status" />
+                <input type="hidden" name="match_id" value={m.id} />
+                <input type="hidden" name="status" value="rejected" />
+                <button type="submit" class="text-danger bg-danger/10 hover:bg-danger/20 text-xs px-3 py-1.5 rounded-lg transition-colors">Reject</button>
+              </form>
+            )}
+            {m.status === 'accepted' && (
+              <form method="POST" class="inline">
+                <input type="hidden" name="_action" value="update_status" />
+                <input type="hidden" name="match_id" value={m.id} />
+                <input type="hidden" name="status" value="active" />
+                <button type="submit" class="text-accent bg-accent/10 hover:bg-accent/20 text-xs px-3 py-1.5 rounded-lg transition-colors">Activate</button>
+              </form>
+            )}
+            <a href={`/calculator?match_id=${m.id}&buyer_id=${m.buyer_id}&operator_id=${m.operator_id}`}
+              class="text-gray-400 hover:text-gray-200 text-xs px-3 py-1.5 rounded-lg bg-gray-800/50 hover:bg-gray-800 transition-colors ml-auto">
+              Calculate Economics
+            </a>
+            <form method="POST" class="inline" onsubmit="return confirm('Delete this match?')">
+              <input type="hidden" name="_action" value="delete" />
+              <input type="hidden" name="match_id" value={m.id} />
+              <button type="submit" class="text-gray-600 hover:text-danger text-xs px-3 py-1.5 rounded-lg transition-colors">Delete</button>
+            </form>
+          </div>
+        </div>
+      ))}
+    </div>
+  )}
+</Layout>
