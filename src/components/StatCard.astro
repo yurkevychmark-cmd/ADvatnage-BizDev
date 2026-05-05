@@ -8,8 +8,9 @@ interface Props {
 const { label, value, sub } = Astro.props;
 ---
 
-<div class="bg-card rounded-xl p-6 border border-gray-800">
-  <p class="text-xs text-gray-500 uppercase tracking-wide mb-1">{label}</p>
+<div class="bg-card rounded-xl p-6 border border-border relative overflow-hidden group hover:border-accent/30 transition-colors">
+  <div class="absolute inset-0 bg-gradient-to-br from-accent/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity"></div>
+  <p class="text-xs text-gray-500 uppercase tracking-wider mb-1">{label}</p>
   <p class="text-2xl font-bold">{value}</p>
-  {sub && <p class="text-xs text-gray-500 mt-1">{sub}</p>}
+  {sub && <p class="text-xs text-gray-600 mt-1">{sub}</p>}
 </div>

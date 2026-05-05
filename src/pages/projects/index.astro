@@ -1,0 +1,219 @@
+---
+import Layout from '../../components/Layout.astro';
+import { supabase } from '../../lib/supabase';
+import type { Project } from '../../lib/types';
+
+if (Astro.request.method === 'POST') {
+  const form = await Astro.request.formData();
+  const action = form.get('_action');
+
+  if (action === 'update_actuals') {
+    const id = form.get('project_id') as string;
+    await supabase.from('projects').update({
+      actual_spend: Number(form.get('actual_spend')) || null,
+      actual_conversions: Number(form.get('actual_conversions')) || null,
+      actual_revenue: Number(form.get('actual_revenue')) || null,
+      status: form.get('status') as string,
+    }).eq('id', id);
+  }
+
+  if (action === 'delete') {
+    await supabase.from('projects').delete().eq('id', form.get('project_id') as string);
+  }
+
+  return Astro.redirect('/projects');
+}
+
+const { data: projects } = await supabase
+  .from('projects')
+  .select('*, buyer:buyers(name), operator:operators(name)')
+  .order('created_at', { ascending: false });
+
+const projectsJson = JSON.stringify(projects ?? []);
+---
+
+<Layout title="Projects">
+  <div class="flex items-center justify-between mb-8">
+    <div>
+      <h1 class="text-2xl font-bold">Projects</h1>
+      <p class="text-gray-500 text-sm mt-1">Campaign performance — planned vs actual</p>
+    </div>
+    <div class="flex items-center gap-3">
+      <button id="export-csv" class="text-sm text-gray-400 hover:text-gray-200 border border-border px-4 py-2 rounded-lg bg-card-2 transition-colors">
+        ↓ Export CSV
+      </button>
+      <a href="/calculator" class="bg-accent hover:bg-accent-dark text-white text-sm font-medium px-5 py-2.5 rounded-lg transition-colors shadow-lg shadow-accent/20">
+        + New Project
+      </a>
+    </div>
+  </div>
+
+  {(!projects || projects.length === 0) ? (
+    <div class="bg-card rounded-xl border border-border p-12 text-center">
+      <p class="text-gray-500 mb-2">No projects yet.</p>
+      <a href="/calculator" class="text-accent hover:underline text-sm">Create one in the Calculator</a>
+    </div>
+  ) : (
+    <div class="space-y-4">
+      {(projects as any[]).map(p => {
+        const actualRoi = p.actual_revenue != null && p.actual_spend != null && p.actual_spend > 0
+          ? ((p.actual_revenue - p.actual_spend) / p.actual_spend * 100).toFixed(1)
+          : null;
+
+        return (
+          <div class="bg-card rounded-xl border border-border p-6 hover:border-accent/25 transition-colors">
+            <div class="flex items-start justify-between mb-4">
+              <div>
+                <h3 class="font-semibold text-lg">{p.name}</h3>
+                {(p.buyer || p.operator) && (
+                  <p class="text-gray-500 text-sm mt-0.5">
+                    {p.buyer?.name} {p.buyer && p.operator ? '↔' : ''} {p.operator?.name}
+                  </p>
+                )}
+              </div>
+              <div class="flex items-center gap-3">
+                <select form={`form_${p.id}`} name="status" class="bg-card-2 border border-border rounded-lg px-3 py-1.5 text-sm text-gray-300 focus:border-accent outline-none">
+                  {['draft','active','completed','cancelled'].map(s => (
+                    <option value={s} selected={p.status === s}>{s}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            <div class="grid grid-cols-3 gap-4 mb-5">
+              <!-- Planned -->
+              <div class="bg-card-2 rounded-lg border border-border p-4">
+                <p class="text-xs text-gray-500 uppercase tracking-wide mb-3 flex items-center gap-1">
+                  <span class="w-1.5 h-1.5 rounded-full bg-gray-500"></span> Planned
+                </p>
+                <div class="space-y-1.5 text-sm">
+                  <div class="flex justify-between">
+                    <span class="text-gray-500">Spend</span>
+                    <span class="font-mono">${Number(p.planned_spend).toLocaleString()}</span>
+                  </div>
+                  <div class="flex justify-between">
+                    <span class="text-gray-500">Conversions</span>
+                    <span class="font-mono">{p.expected_conversions}</span>
+                  </div>
+                  <div class="flex justify-between">
+                    <span class="text-gray-500">ROI</span>
+                    <span class={`font-mono font-semibold ${(p.calc_roi ?? 0) >= 0 ? 'text-success' : 'text-danger'}`}>
+                      {p.calc_roi != null ? `${p.calc_roi}%` : '—'}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Actual -->
+              <div class={`rounded-lg border p-4 ${p.actual_spend != null ? 'bg-card-2 border-success/20' : 'bg-card-2 border-border border-dashed'}`}>
+                <p class="text-xs text-gray-500 uppercase tracking-wide mb-3 flex items-center gap-1">
+                  <span class={`w-1.5 h-1.5 rounded-full ${p.actual_spend != null ? 'bg-success' : 'bg-gray-700'}`}></span> Actual
+                </p>
+                <div class="space-y-1.5 text-sm">
+                  <div class="flex justify-between">
+                    <span class="text-gray-500">Spend</span>
+                    <span class="font-mono">{p.actual_spend != null ? `$${Number(p.actual_spend).toLocaleString()}` : '—'}</span>
+                  </div>
+                  <div class="flex justify-between">
+                    <span class="text-gray-500">Conversions</span>
+                    <span class="font-mono">{p.actual_conversions ?? '—'}</span>
+                  </div>
+                  <div class="flex justify-between">
+                    <span class="text-gray-500">ROI</span>
+                    <span class={`font-mono font-semibold ${actualRoi != null ? (Number(actualRoi) >= 0 ? 'text-success' : 'text-danger') : 'text-gray-600'}`}>
+                      {actualRoi != null ? `${actualRoi}%` : '—'}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Delta -->
+              <div class="bg-card-2 rounded-lg border border-border p-4">
+                <p class="text-xs text-gray-500 uppercase tracking-wide mb-3 flex items-center gap-1">
+                  <span class="w-1.5 h-1.5 rounded-full bg-accent"></span> Delta
+                </p>
+                <div class="space-y-1.5 text-sm">
+                  <div class="flex justify-between">
+                    <span class="text-gray-500">Spend</span>
+                    <span class={`font-mono ${p.actual_spend != null ? (p.actual_spend > p.planned_spend ? 'text-danger' : 'text-success') : 'text-gray-600'}`}>
+                      {p.actual_spend != null ? `${p.actual_spend > p.planned_spend ? '+' : ''}$${Math.abs(p.actual_spend - p.planned_spend).toLocaleString()}` : '—'}
+                    </span>
+                  </div>
+                  <div class="flex justify-between">
+                    <span class="text-gray-500">Conv.</span>
+                    <span class={`font-mono ${p.actual_conversions != null ? (p.actual_conversions >= p.expected_conversions ? 'text-success' : 'text-danger') : 'text-gray-600'}`}>
+                      {p.actual_conversions != null ? `${p.actual_conversions >= p.expected_conversions ? '+' : ''}${p.actual_conversions - p.expected_conversions}` : '—'}
+                    </span>
+                  </div>
+                  <div class="flex justify-between">
+                    <span class="text-gray-500">ROI Δ</span>
+                    <span class={`font-mono font-semibold ${actualRoi != null && p.calc_roi != null ? (Number(actualRoi) >= p.calc_roi ? 'text-success' : 'text-danger') : 'text-gray-600'}`}>
+                      {actualRoi != null && p.calc_roi != null ? `${(Number(actualRoi) - p.calc_roi).toFixed(1)}pp` : '—'}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Update actuals form -->
+            <form id={`form_${p.id}`} method="POST" class="border-t border-border pt-4 flex gap-3 items-end flex-wrap">
+              <input type="hidden" name="_action" value="update_actuals" />
+              <input type="hidden" name="project_id" value={p.id} />
+              <div>
+                <label class="block text-xs text-gray-500 mb-1">Actual Spend</label>
+                <input type="number" name="actual_spend" step="0.01" value={p.actual_spend ?? ''} placeholder="0"
+                  class="w-32 bg-card-2 border border-border rounded-lg px-3 py-1.5 text-sm text-gray-100 focus:border-accent outline-none" />
+              </div>
+              <div>
+                <label class="block text-xs text-gray-500 mb-1">Actual Conversions</label>
+                <input type="number" name="actual_conversions" value={p.actual_conversions ?? ''} placeholder="0"
+                  class="w-32 bg-card-2 border border-border rounded-lg px-3 py-1.5 text-sm text-gray-100 focus:border-accent outline-none" />
+              </div>
+              <div>
+                <label class="block text-xs text-gray-500 mb-1">Actual Revenue</label>
+                <input type="number" name="actual_revenue" step="0.01" value={p.actual_revenue ?? ''} placeholder="0"
+                  class="w-32 bg-card-2 border border-border rounded-lg px-3 py-1.5 text-sm text-gray-100 focus:border-accent outline-none" />
+              </div>
+              <button type="submit" class="bg-accent hover:bg-accent-dark text-white text-sm font-medium px-4 py-1.5 rounded-lg transition-colors shadow-sm shadow-accent/20">
+                Save Actuals
+              </button>
+              <button type="submit" form={`del_${p.id}`} onclick="return confirm('Delete project?')"
+                class="text-danger bg-danger/10 hover:bg-danger/20 border border-danger/20 text-sm px-3 py-1.5 rounded-lg transition-colors ml-auto">
+                Delete
+              </button>
+            </form>
+            <form id={`del_${p.id}`} method="POST">
+              <input type="hidden" name="_action" value="delete" />
+              <input type="hidden" name="project_id" value={p.id} />
+            </form>
+          </div>
+        );
+      })}
+    </div>
+  )}
+</Layout>
+
+<script define:vars={{ projectsJson }}>
+  const projects = JSON.parse(projectsJson);
+  document.getElementById('export-csv')?.addEventListener('click', () => {
+    const headers = ['Name','Buyer','Operator','Status','Planned Spend','Expected Conv.','Calc ROI %','Actual Spend','Actual Conv.','Actual Revenue'];
+    const rows = projects.map(p => [
+      p.name,
+      p.buyer?.name ?? '',
+      p.operator?.name ?? '',
+      p.status,
+      p.planned_spend,
+      p.expected_conversions,
+      p.calc_roi ?? '',
+      p.actual_spend ?? '',
+      p.actual_conversions ?? '',
+      p.actual_revenue ?? '',
+    ]);
+    const csv = [headers, ...rows].map(r => r.map(v => `"${String(v).replace(/"/g, '""')}"`).join(',')).join('\n');
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'projects.csv';
+    a.click();
+  });
+</script>

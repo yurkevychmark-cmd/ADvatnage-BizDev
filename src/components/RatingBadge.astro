@@ -1,0 +1,31 @@
+---
+interface Props {
+  rating: number | null;
+  size?: 'sm' | 'md';
+}
+
+const { rating, size = 'sm' } = Astro.props;
+
+if (!rating) return;
+
+const color = rating >= 8 ? 'text-success border-success/40 bg-success/10'
+            : rating >= 5 ? 'text-warning border-warning/40 bg-warning/10'
+            : 'text-danger border-danger/40 bg-danger/10';
+
+const dots = Array.from({ length: 10 }, (_, i) => i + 1);
+---
+
+{rating != null && (
+  <div class="flex items-center gap-1.5">
+    <div class="flex gap-0.5">
+      {dots.map(i => (
+        <span class={`rounded-full ${size === 'sm' ? 'w-1.5 h-1.5' : 'w-2 h-2'} ${
+          i <= rating
+            ? rating >= 8 ? 'bg-success' : rating >= 5 ? 'bg-warning' : 'bg-danger'
+            : 'bg-gray-700'
+        }`}></span>
+      ))}
+    </div>
+    <span class={`text-xs font-bold border rounded px-1 py-0.5 ${color}`}>{rating}/10</span>
+  </div>
+)}

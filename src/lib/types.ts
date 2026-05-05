@@ -7,6 +7,7 @@ export interface Buyer {
   geo_expertise: string[];
   traffic_types: string[];
   monthly_budget_capacity: number;
+  rating: number | null;
   notes: string | null;
   created_at: string;
   updated_at: string;
@@ -23,6 +24,7 @@ export interface Operator {
   deal_type: 'CPA' | 'RevShare' | 'Hybrid';
   cpa_value: number | null;
   revshare_pct: number | null;
+  rating: number | null;
   notes: string | null;
   created_at: string;
   updated_at: string;
@@ -37,9 +39,18 @@ export interface Match {
   traffic_overlap: string[];
   budget_fit: boolean;
   status: 'suggested' | 'accepted' | 'rejected' | 'active';
+  pipeline_stage: 'new' | 'negotiation' | 'trial' | 'active' | 'completed';
   created_at: string;
   buyer?: Buyer;
   operator?: Operator;
+}
+
+export interface MatchComment {
+  id: string;
+  match_id: string;
+  author: string;
+  body: string;
+  created_at: string;
 }
 
 export interface Project {
@@ -57,8 +68,13 @@ export interface Project {
   calc_ltv: number | null;
   calc_roi: number | null;
   calc_breakeven: number | null;
+  actual_spend: number | null;
+  actual_conversions: number | null;
+  actual_revenue: number | null;
   notes: string | null;
   status: 'draft' | 'active' | 'completed' | 'cancelled';
   created_at: string;
   updated_at: string;
+  buyer?: Buyer;
+  operator?: Operator;
 }

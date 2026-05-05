@@ -6,11 +6,10 @@ const trafficOptions = ['PPC', 'SEO', 'Social', 'Push', 'Native', 'Email', 'Disp
 if (Astro.request.method === 'POST') {
   const { supabase } = await import('../../lib/supabase');
   const form = await Astro.request.formData();
-
   const geoRaw = (form.get('target_geos') as string) || '';
   const geo = geoRaw.split(',').map(g => g.trim().toUpperCase()).filter(Boolean);
   const traffic = trafficOptions.filter(t => form.get(`traffic_${t}`));
-
+  const ratingRaw = form.get('rating') as string;
   const { error } = await supabase.from('operators').insert({
     name: form.get('name') as string,
     brand: (form.get('brand') as string) || null,
@@ -21,49 +20,46 @@ if (Astro.request.method === 'POST') {
     deal_type: (form.get('deal_type') as string) || 'CPA',
     cpa_value: Number(form.get('cpa_value')) || null,
     revshare_pct: Number(form.get('revshare_pct')) || null,
+    rating: ratingRaw ? Number(ratingRaw) : null,
     notes: (form.get('notes') as string) || null,
   });
-
   if (!error) return Astro.redirect('/operators');
 }
+
+const inputCls = "w-full bg-card-2 border border-border rounded-lg px-4 py-2 text-gray-100 focus:border-accent focus:ring-1 focus:ring-accent outline-none placeholder-gray-600 transition-colors";
 ---
 
 <Layout title="Add Operator">
   <div class="mb-8">
-    <a href="/operators" class="text-gray-500 hover:text-gray-300 text-sm">&larr; Back to Operators</a>
+    <a href="/operators" class="text-gray-600 hover:text-gray-300 text-sm transition-colors">&larr; Back to Operators</a>
     <h1 class="text-2xl font-bold mt-2">Add Operator</h1>
   </div>
 
-  <form method="POST" class="bg-card rounded-xl border border-gray-800 p-6 max-w-2xl space-y-5">
+  <form method="POST" class="bg-card rounded-xl border border-border p-6 max-w-2xl space-y-5">
     <div class="grid grid-cols-2 gap-4">
       <div>
         <label class="block text-sm text-gray-400 mb-1">Name *</label>
-        <input type="text" name="name" required
-          class="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2 text-gray-100 focus:border-accent focus:ring-1 focus:ring-accent outline-none" />
+        <input type="text" name="name" required class={inputCls} />
       </div>
       <div>
         <label class="block text-sm text-gray-400 mb-1">Brand</label>
-        <input type="text" name="brand"
-          class="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2 text-gray-100 focus:border-accent focus:ring-1 focus:ring-accent outline-none" />
+        <input type="text" name="brand" class={inputCls} />
       </div>
     </div>
 
     <div>
-      <label class="block text-sm text-gray-400 mb-1">Target GEOs (comma-separated)</label>
-      <input type="text" name="target_geos" placeholder="DE, BR, IN, US"
-        class="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2 text-gray-100 focus:border-accent focus:ring-1 focus:ring-accent outline-none" />
+      <label class="block text-sm text-gray-400 mb-1">Target GEOs <span class="text-gray-600">(comma-separated)</span></label>
+      <input type="text" name="target_geos" placeholder="DE, BR, IN, US" class={inputCls} />
     </div>
 
     <div class="grid grid-cols-2 gap-4">
       <div>
         <label class="block text-sm text-gray-400 mb-1">Budget Min (USD)</label>
-        <input type="number" name="budget_min" step="0.01" min="0" placeholder="10000"
-          class="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2 text-gray-100 focus:border-accent focus:ring-1 focus:ring-accent outline-none" />
+        <input type="number" name="budget_min" step="0.01" min="0" placeholder="10000" class={inputCls} />
       </div>
       <div>
         <label class="block text-sm text-gray-400 mb-1">Budget Max (USD)</label>
-        <input type="number" name="budget_max" step="0.01" min="0" placeholder="100000"
-          class="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2 text-gray-100 focus:border-accent focus:ring-1 focus:ring-accent outline-none" />
+        <input type="number" name="budget_max" step="0.01" min="0" placeholder="100000" class={inputCls} />
       </div>
     </div>
 
@@ -71,9 +67,9 @@ if (Astro.request.method === 'POST') {
       <label class="block text-sm text-gray-400 mb-2">Preferred Traffic Types</label>
       <div class="flex flex-wrap gap-3">
         {trafficOptions.map(t => (
-          <label class="flex items-center gap-2 text-sm text-gray-300 cursor-pointer">
-            <input type="checkbox" name={`traffic_${t}`} class="rounded bg-gray-800 border-gray-700 text-accent focus:ring-accent" />
-            {t}
+          <label class="flex items-center gap-2 text-sm text-gray-300 cursor-pointer group">
+            <input type="checkbox" name={`traffic_${t}`} class="rounded bg-card-2 border-border text-accent focus:ring-accent focus:ring-offset-0" />
+            <span class="group-hover:text-accent transition-colors">{t}</span>
           </label>
         ))}
       </div>
@@ -82,8 +78,7 @@ if (Astro.request.method === 'POST') {
     <div class="grid grid-cols-3 gap-4">
       <div>
         <label class="block text-sm text-gray-400 mb-1">Deal Type</label>
-        <select name="deal_type"
-          class="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2 text-gray-100 focus:border-accent focus:ring-1 focus:ring-accent outline-none">
+        <select name="deal_type" class={inputCls}>
           <option value="CPA">CPA</option>
           <option value="RevShare">RevShare</option>
           <option value="Hybrid">Hybrid</option>
@@ -91,24 +86,48 @@ if (Astro.request.method === 'POST') {
       </div>
       <div>
         <label class="block text-sm text-gray-400 mb-1">CPA Value (USD)</label>
-        <input type="number" name="cpa_value" step="0.01" min="0"
-          class="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2 text-gray-100 focus:border-accent focus:ring-1 focus:ring-accent outline-none" />
+        <input type="number" name="cpa_value" step="0.01" min="0" class={inputCls} />
       </div>
       <div>
         <label class="block text-sm text-gray-400 mb-1">RevShare %</label>
-        <input type="number" name="revshare_pct" step="0.01" min="0" max="100"
-          class="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2 text-gray-100 focus:border-accent focus:ring-1 focus:ring-accent outline-none" />
+        <input type="number" name="revshare_pct" step="0.01" min="0" max="100" class={inputCls} />
+      </div>
+    </div>
+
+    <div>
+      <label class="block text-sm text-gray-400 mb-1">Rating <span class="text-gray-600">(1–10)</span></label>
+      <input type="number" name="rating" id="rating_input" min="1" max="10" placeholder="e.g. 8" class={inputCls} />
+      <div class="flex gap-0.5 mt-2">
+        {Array.from({ length: 10 }, (_, i) => (
+          <span class="w-2 h-2 rounded-full bg-gray-700 rating-dot transition-colors" data-index={i + 1}></span>
+        ))}
       </div>
     </div>
 
     <div>
       <label class="block text-sm text-gray-400 mb-1">Notes</label>
-      <textarea name="notes" rows="3"
-        class="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2 text-gray-100 focus:border-accent focus:ring-1 focus:ring-accent outline-none resize-none"></textarea>
+      <textarea name="notes" rows="3" class={`${inputCls} resize-none`}></textarea>
     </div>
 
-    <button type="submit" class="bg-accent hover:bg-indigo-600 text-white font-medium px-6 py-2.5 rounded-lg transition-colors">
+    <button type="submit" class="bg-accent hover:bg-accent-dark text-white font-medium px-6 py-2.5 rounded-lg transition-colors shadow-lg shadow-accent/20">
       Create Operator
     </button>
   </form>
 </Layout>
+
+<script>
+  const input = document.getElementById('rating_input') as HTMLInputElement;
+  const dots = document.querySelectorAll('.rating-dot');
+  function updateDots(val: number) {
+    dots.forEach((dot, i) => {
+      (dot as HTMLElement).className = `w-2 h-2 rounded-full rating-dot transition-colors ${
+        i < val ? (val >= 8 ? 'bg-success' : val >= 5 ? 'bg-warning' : 'bg-danger') : 'bg-gray-700'
+      }`;
+    });
+  }
+  input?.addEventListener('input', () => updateDots(Number(input.value)));
+  dots.forEach((dot, i) => {
+    (dot as HTMLElement).style.cursor = 'pointer';
+    dot.addEventListener('click', () => { input.value = String(i + 1); updateDots(i + 1); });
+  });
+</script>

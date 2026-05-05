@@ -9,17 +9,15 @@ const trafficOptions = ['PPC', 'SEO', 'Social', 'Push', 'Native', 'Email', 'Disp
 if (Astro.request.method === 'POST') {
   const form = await Astro.request.formData();
   const action = form.get('_action');
-
   if (action === 'delete') {
     await supabase.from('operators').delete().eq('id', id!);
     return Astro.redirect('/operators');
   }
-
   const geoRaw = (form.get('target_geos') as string) || '';
   const geo = geoRaw.split(',').map(g => g.trim().toUpperCase()).filter(Boolean);
   const traffic = trafficOptions.filter(t => form.get(`traffic_${t}`));
-
-  const { error } = await supabase.from('operators').update({
+  const ratingRaw = form.get('rating') as string;
+  await supabase.from('operators').update({
     name: form.get('name') as string,
     brand: (form.get('brand') as string) || null,
     target_geos: geo,
@@ -29,55 +27,51 @@ if (Astro.request.method === 'POST') {
     deal_type: (form.get('deal_type') as string) || 'CPA',
     cpa_value: Number(form.get('cpa_value')) || null,
     revshare_pct: Number(form.get('revshare_pct')) || null,
+    rating: ratingRaw ? Number(ratingRaw) : null,
     notes: (form.get('notes') as string) || null,
   }).eq('id', id!);
-
-  if (!error) return Astro.redirect('/operators');
+  return Astro.redirect('/operators');
 }
 
 const { data: operator } = await supabase.from('operators').select('*').eq('id', id!).single();
-
 if (!operator) return Astro.redirect('/operators');
 const op = operator as Operator;
+
+const inputCls = "w-full bg-card-2 border border-border rounded-lg px-4 py-2 text-gray-100 focus:border-accent focus:ring-1 focus:ring-accent outline-none placeholder-gray-600 transition-colors";
 ---
 
 <Layout title={`Edit ${op.name}`}>
   <div class="mb-8">
-    <a href="/operators" class="text-gray-500 hover:text-gray-300 text-sm">&larr; Back to Operators</a>
+    <a href="/operators" class="text-gray-600 hover:text-gray-300 text-sm transition-colors">&larr; Back to Operators</a>
     <h1 class="text-2xl font-bold mt-2">{op.name}</h1>
     {op.brand && <p class="text-gray-500 text-sm">{op.brand}</p>}
   </div>
 
-  <form method="POST" class="bg-card rounded-xl border border-gray-800 p-6 max-w-2xl space-y-5">
+  <form method="POST" class="bg-card rounded-xl border border-border p-6 max-w-2xl space-y-5">
     <div class="grid grid-cols-2 gap-4">
       <div>
         <label class="block text-sm text-gray-400 mb-1">Name *</label>
-        <input type="text" name="name" required value={op.name}
-          class="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2 text-gray-100 focus:border-accent focus:ring-1 focus:ring-accent outline-none" />
+        <input type="text" name="name" required value={op.name} class={inputCls} />
       </div>
       <div>
         <label class="block text-sm text-gray-400 mb-1">Brand</label>
-        <input type="text" name="brand" value={op.brand || ''}
-          class="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2 text-gray-100 focus:border-accent focus:ring-1 focus:ring-accent outline-none" />
+        <input type="text" name="brand" value={op.brand || ''} class={inputCls} />
       </div>
     </div>
 
     <div>
-      <label class="block text-sm text-gray-400 mb-1">Target GEOs (comma-separated)</label>
-      <input type="text" name="target_geos" value={op.target_geos.join(', ')}
-        class="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2 text-gray-100 focus:border-accent focus:ring-1 focus:ring-accent outline-none" />
+      <label class="block text-sm text-gray-400 mb-1">Target GEOs <span class="text-gray-600">(comma-separated)</span></label>
+      <input type="text" name="target_geos" value={(op.target_geos ?? []).join(', ')} class={inputCls} />
     </div>
 
     <div class="grid grid-cols-2 gap-4">
       <div>
         <label class="block text-sm text-gray-400 mb-1">Budget Min (USD)</label>
-        <input type="number" name="budget_min" step="0.01" min="0" value={op.budget_min}
-          class="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2 text-gray-100 focus:border-accent focus:ring-1 focus:ring-accent outline-none" />
+        <input type="number" name="budget_min" step="0.01" min="0" value={op.budget_min} class={inputCls} />
       </div>
       <div>
         <label class="block text-sm text-gray-400 mb-1">Budget Max (USD)</label>
-        <input type="number" name="budget_max" step="0.01" min="0" value={op.budget_max}
-          class="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2 text-gray-100 focus:border-accent focus:ring-1 focus:ring-accent outline-none" />
+        <input type="number" name="budget_max" step="0.01" min="0" value={op.budget_max} class={inputCls} />
       </div>
     </div>
 
@@ -85,11 +79,10 @@ const op = operator as Operator;
       <label class="block text-sm text-gray-400 mb-2">Preferred Traffic Types</label>
       <div class="flex flex-wrap gap-3">
         {trafficOptions.map(t => (
-          <label class="flex items-center gap-2 text-sm text-gray-300 cursor-pointer">
-            <input type="checkbox" name={`traffic_${t}`}
-              checked={op.preferred_traffic.includes(t)}
-              class="rounded bg-gray-800 border-gray-700 text-accent focus:ring-accent" />
-            {t}
+          <label class="flex items-center gap-2 text-sm text-gray-300 cursor-pointer group">
+            <input type="checkbox" name={`traffic_${t}`} checked={(op.preferred_traffic ?? []).includes(t)}
+              class="rounded bg-card-2 border-border text-accent focus:ring-accent focus:ring-offset-0" />
+            <span class="group-hover:text-accent transition-colors">{t}</span>
           </label>
         ))}
       </div>
@@ -98,8 +91,7 @@ const op = operator as Operator;
     <div class="grid grid-cols-3 gap-4">
       <div>
         <label class="block text-sm text-gray-400 mb-1">Deal Type</label>
-        <select name="deal_type"
-          class="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2 text-gray-100 focus:border-accent focus:ring-1 focus:ring-accent outline-none">
+        <select name="deal_type" class={inputCls}>
           <option value="CPA" selected={op.deal_type === 'CPA'}>CPA</option>
           <option value="RevShare" selected={op.deal_type === 'RevShare'}>RevShare</option>
           <option value="Hybrid" selected={op.deal_type === 'Hybrid'}>Hybrid</option>
@@ -107,31 +99,59 @@ const op = operator as Operator;
       </div>
       <div>
         <label class="block text-sm text-gray-400 mb-1">CPA Value (USD)</label>
-        <input type="number" name="cpa_value" step="0.01" min="0" value={op.cpa_value || ''}
-          class="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2 text-gray-100 focus:border-accent focus:ring-1 focus:ring-accent outline-none" />
+        <input type="number" name="cpa_value" step="0.01" min="0" value={op.cpa_value || ''} class={inputCls} />
       </div>
       <div>
         <label class="block text-sm text-gray-400 mb-1">RevShare %</label>
-        <input type="number" name="revshare_pct" step="0.01" min="0" max="100" value={op.revshare_pct || ''}
-          class="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2 text-gray-100 focus:border-accent focus:ring-1 focus:ring-accent outline-none" />
+        <input type="number" name="revshare_pct" step="0.01" min="0" max="100" value={op.revshare_pct || ''} class={inputCls} />
+      </div>
+    </div>
+
+    <div>
+      <label class="block text-sm text-gray-400 mb-1">Rating <span class="text-gray-600">(1–10)</span></label>
+      <input type="number" name="rating" id="rating_input" min="1" max="10" value={op.rating ?? ''} placeholder="e.g. 8" class={inputCls} />
+      <div class="flex gap-0.5 mt-2">
+        {Array.from({ length: 10 }, (_, i) => (
+          <span class={`w-2 h-2 rounded-full rating-dot transition-colors ${
+            op.rating != null && i < op.rating
+              ? op.rating >= 8 ? 'bg-success' : op.rating >= 5 ? 'bg-warning' : 'bg-danger'
+              : 'bg-gray-700'
+          }`} data-index={i + 1}></span>
+        ))}
       </div>
     </div>
 
     <div>
       <label class="block text-sm text-gray-400 mb-1">Notes</label>
-      <textarea name="notes" rows="3"
-        class="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2 text-gray-100 focus:border-accent focus:ring-1 focus:ring-accent outline-none resize-none">{op.notes || ''}</textarea>
+      <textarea name="notes" rows="3" class={`${inputCls} resize-none`}>{op.notes || ''}</textarea>
     </div>
 
     <div class="flex items-center justify-between pt-2">
-      <button type="submit" class="bg-accent hover:bg-indigo-600 text-white font-medium px-6 py-2.5 rounded-lg transition-colors">
+      <button type="submit" class="bg-accent hover:bg-accent-dark text-white font-medium px-6 py-2.5 rounded-lg transition-colors shadow-lg shadow-accent/20">
         Save Changes
       </button>
       <button type="submit" name="_action" value="delete"
         onclick="return confirm('Delete this operator?')"
-        class="bg-danger/10 text-danger hover:bg-danger/20 rounded-lg px-4 py-2.5 text-sm transition-colors">
+        class="bg-danger/10 text-danger hover:bg-danger/20 border border-danger/20 rounded-lg px-4 py-2.5 text-sm transition-colors">
         Delete Operator
       </button>
     </div>
   </form>
 </Layout>
+
+<script>
+  const input = document.getElementById('rating_input') as HTMLInputElement;
+  const dots = document.querySelectorAll('.rating-dot');
+  function updateDots(val: number) {
+    dots.forEach((dot, i) => {
+      (dot as HTMLElement).className = `w-2 h-2 rounded-full rating-dot transition-colors ${
+        i < val ? (val >= 8 ? 'bg-success' : val >= 5 ? 'bg-warning' : 'bg-danger') : 'bg-gray-700'
+      }`;
+    });
+  }
+  input?.addEventListener('input', () => updateDots(Number(input.value)));
+  dots.forEach((dot, i) => {
+    (dot as HTMLElement).style.cursor = 'pointer';
+    dot.addEventListener('click', () => { input.value = String(i + 1); updateDots(i + 1); });
+  });
+</script>

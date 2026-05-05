@@ -5,11 +5,11 @@ interface Props {
 
 const { score } = Astro.props;
 
-const color = score >= 60 ? 'text-success bg-success/20'
-            : score >= 30 ? 'text-warning bg-warning/20'
-            : 'text-danger bg-danger/20';
+const color = score >= 60 ? 'text-success bg-success/15 border-success/30'
+            : score >= 30 ? 'text-warning bg-warning/15 border-warning/30'
+            : 'text-danger bg-danger/15 border-danger/30';
 ---
 
-<span class={`inline-block text-xs font-bold px-2.5 py-1 rounded-full ${color}`}>
+<span class={`inline-block text-xs font-bold px-2.5 py-1 rounded border ${color}`}>
   {score}%
 </span>

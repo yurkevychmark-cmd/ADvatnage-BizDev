@@ -2,6 +2,7 @@
 import Layout from '../../components/Layout.astro';
 import GeoTag from '../../components/GeoTag.astro';
 import TrafficTag from '../../components/TrafficTag.astro';
+import RatingBadge from '../../components/RatingBadge.astro';
 import { supabase } from '../../lib/supabase';
 import type { Operator } from '../../lib/types';
 
@@ -9,48 +10,162 @@ const { data: operators } = await supabase
   .from('operators')
   .select('*')
   .order('created_at', { ascending: false });
+
+const operatorsJson = JSON.stringify(operators ?? []);
 ---
 
 <Layout title="Operators">
-  <div class="flex items-center justify-between mb-8">
+  <div class="flex items-center justify-between mb-6">
     <div>
       <h1 class="text-2xl font-bold">Operators</h1>
       <p class="text-gray-500 text-sm mt-1">Advertisers and casinos available for partnerships</p>
     </div>
-    <a href="/operators/add" class="bg-accent hover:bg-indigo-600 text-white text-sm font-medium px-5 py-2.5 rounded-lg transition-colors">+ Add Operator</a>
+    <div class="flex items-center gap-3">
+      <button id="export-csv" class="text-sm text-gray-400 hover:text-gray-200 border border-border px-4 py-2 rounded-lg bg-card-2 transition-colors">
+        ↓ Export CSV
+      </button>
+      <a href="/operators/add" class="bg-accent hover:bg-accent-dark text-white text-sm font-medium px-5 py-2.5 rounded-lg transition-colors shadow-lg shadow-accent/20">
+        + Add Operator
+      </a>
+    </div>
+  </div>
+
+  <!-- Filter bar -->
+  <div class="flex flex-wrap gap-3 mb-6">
+    <input id="search" type="text" placeholder="Search by name or brand…"
+      class="flex-1 min-w-48 bg-card border border-border rounded-lg px-4 py-2 text-sm text-gray-200 placeholder-gray-600 focus:border-accent outline-none" />
+    <input id="filter-geo" type="text" placeholder="Filter by GEO (e.g. UK)"
+      class="w-40 bg-card border border-border rounded-lg px-4 py-2 text-sm text-gray-200 placeholder-gray-600 focus:border-accent outline-none" />
+    <select id="filter-deal" class="bg-card border border-border rounded-lg px-4 py-2 text-sm text-gray-300 focus:border-accent outline-none">
+      <option value="">All deal types</option>
+      <option>CPA</option>
+      <option>RevShare</option>
+      <option>Hybrid</option>
+    </select>
+    <select id="filter-rating" class="bg-card border border-border rounded-lg px-4 py-2 text-sm text-gray-300 focus:border-accent outline-none">
+      <option value="">Any rating</option>
+      <option value="8">8+ (Top)</option>
+      <option value="5">5+ (Good)</option>
+      <option value="1">Rated</option>
+    </select>
+    <span id="count" class="self-center text-xs text-gray-600 font-mono"></span>
   </div>
 
   {(!operators || operators.length === 0) ? (
-    <div class="bg-card rounded-xl border border-gray-800 p-12 text-center">
+    <div class="bg-card rounded-xl border border-border p-12 text-center">
       <p class="text-gray-500">No operators yet.</p>
       <a href="/operators/add" class="text-accent hover:underline text-sm mt-2 inline-block">Add your first operator</a>
     </div>
   ) : (
-    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+    <div id="grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
       {(operators as Operator[]).map(op => (
-        <a href={`/operators/${op.id}`} class="bg-card rounded-xl border border-gray-800 p-6 hover:border-gray-700 transition-colors block">
+        <a
+          href={`/operators/${op.id}`}
+          class="op-card bg-card rounded-xl border border-border p-6 hover:border-accent/40 transition-all group block relative overflow-hidden"
+          data-name={`${op.name} ${op.brand ?? ''}`.toLowerCase()}
+          data-geo={(op.target_geos ?? []).join(' ').toLowerCase()}
+          data-deal={(op.deal_type ?? '').toLowerCase()}
+          data-rating={op.rating ?? ''}
+        >
+          <div class="absolute inset-0 bg-gradient-to-br from-accent/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none"></div>
           <div class="flex items-start justify-between mb-3">
-            <div>
-              <h3 class="font-semibold">{op.name}</h3>
-              {op.brand && <p class="text-gray-500 text-xs">{op.brand}</p>}
+            <div class="flex-1 min-w-0">
+              <h3 class="font-semibold group-hover:text-accent transition-colors truncate">{op.name}</h3>
+              {op.brand && <p class="text-gray-500 text-xs mt-0.5">{op.brand}</p>}
             </div>
-            <span class={`text-xs px-2 py-0.5 rounded-full font-medium ${
-              op.deal_type === 'CPA' ? 'bg-success/20 text-success' :
-              op.deal_type === 'RevShare' ? 'bg-accent/20 text-accent' :
-              'bg-warning/20 text-warning'
-            }`}>{op.deal_type}</span>
+            <span class={`text-xs px-2 py-0.5 rounded border font-medium shrink-0 ml-2 ${
+              op.deal_type === 'CPA' ? 'bg-success/15 text-success border-success/30' :
+              op.deal_type === 'RevShare' ? 'bg-accent/15 text-accent border-accent/30' :
+              'bg-warning/15 text-warning border-warning/30'
+            }`}>{op.deal_type || 'CPA'}</span>
           </div>
+
+          {op.rating != null && (
+            <div class="mb-3">
+              <RatingBadge rating={op.rating} />
+            </div>
+          )}
+
           <div class="flex flex-wrap gap-1 mb-2">
-            {op.target_geos.map(g => <GeoTag code={g} />)}
+            {(op.target_geos ?? []).map(g => <GeoTag code={g} />)}
+            {(op.target_geos ?? []).length === 0 && <span class="text-gray-700 text-xs italic">No GEOs set</span>}
           </div>
           <div class="flex flex-wrap gap-1 mb-3">
-            {op.preferred_traffic.map(t => <TrafficTag type={t} />)}
+            {(op.preferred_traffic ?? []).map(t => <TrafficTag type={t} />)}
           </div>
-          <div class="text-xs text-gray-500">
-            Budget: ${Number(op.budget_min).toLocaleString()} – ${Number(op.budget_max).toLocaleString()}
+          <div class="text-xs text-gray-600 font-mono border-t border-border pt-3">
+            ${Number(op.budget_min || 0).toLocaleString()} – ${Number(op.budget_max || 0).toLocaleString()} / mo
           </div>
         </a>
       ))}
     </div>
   )}
+
+  <div id="empty-filter" class="hidden bg-card rounded-xl border border-border p-12 text-center">
+    <p class="text-gray-500">No operators match your filters.</p>
+  </div>
 </Layout>
+
+<script define:vars={{ operatorsJson }}>
+  const operators = JSON.parse(operatorsJson);
+  const cards = document.querySelectorAll('.op-card');
+  const emptyFilter = document.getElementById('empty-filter');
+  const countEl = document.getElementById('count');
+
+  function applyFilters() {
+    const search = document.getElementById('search').value.toLowerCase();
+    const geo = document.getElementById('filter-geo').value.toLowerCase();
+    const deal = document.getElementById('filter-deal').value.toLowerCase();
+    const ratingMin = Number(document.getElementById('filter-rating').value) || 0;
+
+    let visible = 0;
+    cards.forEach(card => {
+      const name = card.dataset.name ?? '';
+      const cardGeo = card.dataset.geo ?? '';
+      const cardDeal = card.dataset.deal ?? '';
+      const cardRating = Number(card.dataset.rating) || 0;
+
+      const ok =
+        (!search || name.includes(search)) &&
+        (!geo || cardGeo.includes(geo)) &&
+        (!deal || cardDeal === deal) &&
+        (!ratingMin || cardRating >= ratingMin);
+
+      card.style.display = ok ? '' : 'none';
+      if (ok) visible++;
+    });
+
+    countEl.textContent = `${visible} of ${cards.length}`;
+    emptyFilter.classList.toggle('hidden', visible > 0);
+  }
+
+  ['search', 'filter-geo', 'filter-deal', 'filter-rating'].forEach(id => {
+    document.getElementById(id)?.addEventListener('input', applyFilters);
+  });
+
+  applyFilters();
+
+  // CSV export
+  document.getElementById('export-csv')?.addEventListener('click', () => {
+    const headers = ['Name','Brand','GEOs','Traffic Types','Deal Type','CPA Value','RevShare %','Budget Min','Budget Max','Rating','Notes'];
+    const rows = operators.map(o => [
+      o.name,
+      o.brand ?? '',
+      (o.target_geos ?? []).join(';'),
+      (o.preferred_traffic ?? []).join(';'),
+      o.deal_type ?? '',
+      o.cpa_value ?? '',
+      o.revshare_pct ?? '',
+      o.budget_min ?? '',
+      o.budget_max ?? '',
+      o.rating ?? '',
+      (o.notes ?? '').replace(/\n/g, ' '),
+    ]);
+    const csv = [headers, ...rows].map(r => r.map(v => `"${String(v).replace(/"/g, '""')}"`).join(',')).join('\n');
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'operators.csv';
+    a.click();
+  });
+</script>

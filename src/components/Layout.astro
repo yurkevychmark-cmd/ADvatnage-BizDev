@@ -14,10 +14,23 @@ const { title } = Astro.props;
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>{title} | ADvantage BizDev</title>
+    <style>
+      body {
+        background-color: #070909;
+        background-image:
+          radial-gradient(ellipse 80% 50% at 20% -10%, rgba(225,29,72,0.07) 0%, transparent 60%),
+          radial-gradient(ellipse 60% 40% at 80% 110%, rgba(225,29,72,0.05) 0%, transparent 60%);
+        background-attachment: fixed;
+      }
+      ::-webkit-scrollbar { width: 6px; }
+      ::-webkit-scrollbar-track { background: #0d1117; }
+      ::-webkit-scrollbar-thumb { background: #1a2235; border-radius: 3px; }
+      ::-webkit-scrollbar-thumb:hover { background: #e11d48; }
+    </style>
   </head>
-  <body class="bg-surface text-gray-100 min-h-screen flex">
+  <body class="text-gray-100 min-h-screen flex">
     <Nav currentPath={Astro.url.pathname} />
-    <main class="flex-1 ml-60 p-8">
+    <main class="flex-1 ml-60 p-8 min-h-screen">
       <slot />
     </main>
   </body>

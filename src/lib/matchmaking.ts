@@ -17,13 +17,19 @@ export function computeMatches(buyers: Buyer[], operators: Operator[]): MatchRes
   const results: MatchResult[] = [];
 
   for (const buyer of buyers) {
+    const buyerGeo = buyer.geo_expertise ?? [];
+    const buyerTraffic = buyer.traffic_types ?? [];
+
     for (const operator of operators) {
-      const geoOverlap = buyer.geo_expertise.filter(g => operator.target_geos.includes(g));
-      const geoUnion = new Set([...buyer.geo_expertise, ...operator.target_geos]).size;
+      const opGeo = operator.target_geos ?? [];
+      const opTraffic = operator.preferred_traffic ?? [];
+
+      const geoOverlap = buyerGeo.filter(g => opGeo.includes(g));
+      const geoUnion = new Set([...buyerGeo, ...opGeo]).size;
       const geoScore = geoUnion > 0 ? (geoOverlap.length / geoUnion) * 100 : 0;
 
-      const trafficOverlap = buyer.traffic_types.filter(t => operator.preferred_traffic.includes(t));
-      const trafficUnion = new Set([...buyer.traffic_types, ...operator.preferred_traffic]).size;
+      const trafficOverlap = buyerTraffic.filter(t => opTraffic.includes(t));
+      const trafficUnion = new Set([...buyerTraffic, ...opTraffic]).size;
       const trafficScore = trafficUnion > 0 ? (trafficOverlap.length / trafficUnion) * 100 : 0;
 
       const budgetFit = buyer.monthly_budget_capacity >= operator.budget_min

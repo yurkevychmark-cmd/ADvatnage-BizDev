@@ -27,7 +27,6 @@ let savedMessage = '';
 
 if (Astro.request.method === 'POST') {
   const form = await Astro.request.formData();
-
   const inputs = {
     planned_spend: Number(form.get('planned_spend')) || 0,
     expected_conversions: Number(form.get('expected_conversions')) || 0,
@@ -35,9 +34,7 @@ if (Astro.request.method === 'POST') {
     cpa_payout: Number(form.get('cpa_payout')) || 0,
     revshare_pct: Number(form.get('revshare_pct')) || 0,
   };
-
   const results = calculateEconomics(inputs);
-
   const { error } = await supabase.from('projects').insert({
     name: (form.get('project_name') as string) || 'Untitled Project',
     match_id: matchId || null,
@@ -53,117 +50,104 @@ if (Astro.request.method === 'POST') {
     calc_roi: results.roi,
     calc_breakeven: results.breakeven_conversions,
   });
-
-  if (!error) savedMessage = 'Project saved successfully!';
+  if (!error) savedMessage = 'Project saved!';
 }
+
+const inputCls = "w-full bg-card-2 border border-border rounded-lg px-4 py-2 text-gray-100 focus:border-accent focus:ring-1 focus:ring-accent outline-none placeholder-gray-600 transition-colors";
 ---
 
 <Layout title="Unit Economics Calculator">
   <div class="mb-8">
     <h1 class="text-2xl font-bold">Unit Economics Calculator</h1>
-    <p class="text-gray-500 text-sm mt-1">
-      Calculate ROI before launching a project
+    <p class="text-gray-600 text-sm mt-1">
+      Full project economics before launch
       {prefill.buyerName && prefill.operatorName && (
-        <span> — {prefill.buyerName} ↔ {prefill.operatorName}</span>
+        <span class="text-gray-500"> — {prefill.buyerName} ↔ {prefill.operatorName}</span>
       )}
     </p>
   </div>
 
   {savedMessage && (
-    <div class="bg-success/10 text-success border border-success/20 rounded-lg px-4 py-3 mb-6 text-sm">
+    <div class="bg-success/10 text-success border border-success/25 rounded-lg px-4 py-3 mb-6 text-sm">
       {savedMessage}
     </div>
   )}
 
   <div class="grid grid-cols-2 gap-6">
-    <div class="bg-card rounded-xl border border-gray-800 p-6">
-      <h2 class="text-lg font-semibold mb-5">Inputs</h2>
-
+    <div class="bg-card rounded-xl border border-border p-6">
+      <h2 class="text-base font-semibold mb-5 flex items-center gap-2">
+        <span class="w-1.5 h-4 bg-accent rounded-full"></span>
+        Inputs
+      </h2>
       <form method="POST" id="calcForm" class="space-y-4">
         <div>
-          <label class="block text-sm text-gray-400 mb-1">Project Name</label>
-          <input type="text" name="project_name" placeholder="e.g. DE Casino Push Campaign"
-            class="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2 text-gray-100 focus:border-accent focus:ring-1 focus:ring-accent outline-none" />
+          <label class="block text-sm text-gray-500 mb-1">Project Name</label>
+          <input type="text" name="project_name" placeholder="e.g. DE Casino Push Campaign" class={inputCls} />
         </div>
-
         <div>
-          <label class="block text-sm text-gray-400 mb-1">Planned Spend (USD)</label>
-          <input type="number" name="planned_spend" id="planned_spend" step="0.01" min="0" value="10000"
-            class="calc-input w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2 text-gray-100 focus:border-accent focus:ring-1 focus:ring-accent outline-none" />
+          <label class="block text-sm text-gray-500 mb-1">Planned Spend (USD)</label>
+          <input type="number" name="planned_spend" id="planned_spend" step="0.01" min="0" value="10000" class={`calc-input ${inputCls}`} />
         </div>
-
         <div>
-          <label class="block text-sm text-gray-400 mb-1">Expected Conversions (FTDs)</label>
-          <input type="number" name="expected_conversions" id="expected_conversions" min="0" value="200"
-            class="calc-input w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2 text-gray-100 focus:border-accent focus:ring-1 focus:ring-accent outline-none" />
+          <label class="block text-sm text-gray-500 mb-1">Expected Conversions (FTDs)</label>
+          <input type="number" name="expected_conversions" id="expected_conversions" min="0" value="200" class={`calc-input ${inputCls}`} />
         </div>
-
         <div>
-          <label class="block text-sm text-gray-400 mb-1">Avg Revenue per User (ARPU/LTV)</label>
-          <input type="number" name="avg_revenue_per_user" id="avg_revenue_per_user" step="0.01" min="0" value="150"
-            class="calc-input w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2 text-gray-100 focus:border-accent focus:ring-1 focus:ring-accent outline-none" />
+          <label class="block text-sm text-gray-500 mb-1">Avg Revenue per User (ARPU / LTV)</label>
+          <input type="number" name="avg_revenue_per_user" id="avg_revenue_per_user" step="0.01" min="0" value="150" class={`calc-input ${inputCls}`} />
         </div>
-
         <div>
-          <label class="block text-sm text-gray-400 mb-1">CPA Payout (USD per conversion)</label>
-          <input type="number" name="cpa_payout" id="cpa_payout" step="0.01" min="0" value={prefill.cpa_payout || 50}
-            class="calc-input w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2 text-gray-100 focus:border-accent focus:ring-1 focus:ring-accent outline-none" />
+          <label class="block text-sm text-gray-500 mb-1">CPA Payout (USD per conversion)</label>
+          <input type="number" name="cpa_payout" id="cpa_payout" step="0.01" min="0" value={prefill.cpa_payout || 50} class={`calc-input ${inputCls}`} />
         </div>
-
         <div>
-          <label class="block text-sm text-gray-400 mb-1">RevShare %</label>
-          <input type="number" name="revshare_pct" id="revshare_pct" step="0.01" min="0" max="100" value={prefill.revshare_pct || 0}
-            class="calc-input w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2 text-gray-100 focus:border-accent focus:ring-1 focus:ring-accent outline-none" />
+          <label class="block text-sm text-gray-500 mb-1">RevShare %</label>
+          <input type="number" name="revshare_pct" id="revshare_pct" step="0.01" min="0" max="100" value={prefill.revshare_pct || 0} class={`calc-input ${inputCls}`} />
         </div>
-
-        <button type="submit" class="bg-accent hover:bg-indigo-600 text-white font-medium px-6 py-2.5 rounded-lg transition-colors w-full">
+        <button type="submit" class="bg-accent hover:bg-accent-dark text-white font-medium px-6 py-2.5 rounded-lg transition-colors w-full shadow-lg shadow-accent/20 mt-2">
           Save as Project
         </button>
       </form>
     </div>
 
     <div>
-      <div class="bg-card rounded-xl border border-gray-800 p-6 sticky top-8">
-        <h2 class="text-lg font-semibold mb-5">Results</h2>
-
-        <div class="space-y-4">
-          <div class="flex justify-between items-center p-3 bg-gray-800/30 rounded-lg">
-            <span class="text-sm text-gray-400">Effective CPA</span>
-            <span class="font-mono font-bold" id="r_cpa">$0.00</span>
+      <div class="bg-card rounded-xl border border-border p-6 sticky top-8">
+        <h2 class="text-base font-semibold mb-5 flex items-center gap-2">
+          <span class="w-1.5 h-4 bg-accent rounded-full"></span>
+          Results
+        </h2>
+        <div class="space-y-3">
+          <div class="flex justify-between items-center p-3 bg-card-2 rounded-lg border border-border">
+            <span class="text-sm text-gray-500">Effective CPA</span>
+            <span class="font-mono font-semibold" id="r_cpa">$0.00</span>
           </div>
-
-          <div class="flex justify-between items-center p-3 bg-gray-800/30 rounded-lg">
-            <span class="text-sm text-gray-400">LTV (ARPU)</span>
-            <span class="font-mono font-bold" id="r_ltv">$0.00</span>
+          <div class="flex justify-between items-center p-3 bg-card-2 rounded-lg border border-border">
+            <span class="text-sm text-gray-500">LTV (ARPU)</span>
+            <span class="font-mono font-semibold" id="r_ltv">$0.00</span>
           </div>
-
-          <div class="flex justify-between items-center p-3 bg-gray-800/30 rounded-lg">
-            <span class="text-sm text-gray-400">Gross Revenue</span>
-            <span class="font-mono font-bold" id="r_revenue">$0.00</span>
+          <div class="flex justify-between items-center p-3 bg-card-2 rounded-lg border border-border">
+            <span class="text-sm text-gray-500">Gross Revenue</span>
+            <span class="font-mono font-semibold" id="r_revenue">$0.00</span>
           </div>
-
-          <div class="flex justify-between items-center p-3 bg-gray-800/30 rounded-lg">
-            <span class="text-sm text-gray-400">Profit</span>
-            <span class="font-mono font-bold" id="r_profit">$0.00</span>
+          <div class="flex justify-between items-center p-3 bg-card-2 rounded-lg border border-border">
+            <span class="text-sm text-gray-500">Profit</span>
+            <span class="font-mono font-semibold" id="r_profit">$0.00</span>
           </div>
-
-          <div class="flex justify-between items-center p-4 rounded-lg border-2" id="roi_box">
-            <span class="text-sm font-medium">ROI</span>
-            <span class="font-mono text-2xl font-bold" id="r_roi">0.00%</span>
+          <div class="flex justify-between items-center p-4 rounded-xl border-2 border-border" id="roi_box">
+            <span class="text-sm font-medium text-gray-400">ROI</span>
+            <span class="font-mono text-2xl font-black" id="r_roi">0.00%</span>
           </div>
-
-          <div class="flex justify-between items-center p-3 bg-gray-800/30 rounded-lg">
-            <span class="text-sm text-gray-400">Break-even Conversions</span>
-            <span class="font-mono font-bold" id="r_breakeven">0</span>
+          <div class="flex justify-between items-center p-3 bg-card-2 rounded-lg border border-border">
+            <span class="text-sm text-gray-500">Break-even Conversions</span>
+            <span class="font-mono font-semibold" id="r_breakeven">0</span>
           </div>
-
-          <div class="mt-4">
-            <div class="text-xs text-gray-500 mb-1 flex justify-between">
+          <div class="pt-2">
+            <div class="flex justify-between text-xs text-gray-600 mb-1.5">
               <span>Break-even progress</span>
               <span id="r_progress_label">0%</span>
             </div>
-            <div class="w-full bg-gray-800 rounded-full h-3">
-              <div class="h-3 rounded-full transition-all duration-300" id="r_bar" style="width: 0%; background-color: #ef4444;"></div>
+            <div class="w-full bg-card-2 rounded-full h-2 border border-border overflow-hidden">
+              <div class="h-2 rounded-full transition-all duration-300" id="r_bar" style="width: 0%; background-color: #e11d48;"></div>
             </div>
           </div>
         </div>
@@ -196,29 +180,26 @@ if (Astro.request.method === 'POST') {
       document.getElementById('r_breakeven')!.textContent = String(breakeven);
 
       const profitEl = document.getElementById('r_profit')!;
-      profitEl.className = `font-mono font-bold ${profit >= 0 ? 'text-success' : 'text-danger'}`;
+      profitEl.className = `font-mono font-semibold ${profit >= 0 ? 'text-success' : 'text-danger'}`;
 
       const roiBox = document.getElementById('roi_box')!;
       const roiEl = document.getElementById('r_roi')!;
       if (roi >= 0) {
-        roiBox.className = 'flex justify-between items-center p-4 rounded-lg border-2 border-success/30 bg-success/5';
-        roiEl.className = 'font-mono text-2xl font-bold text-success';
+        roiBox.className = 'flex justify-between items-center p-4 rounded-xl border-2 border-success/40 bg-success/5';
+        roiEl.className = 'font-mono text-2xl font-black text-success';
       } else {
-        roiBox.className = 'flex justify-between items-center p-4 rounded-lg border-2 border-danger/30 bg-danger/5';
-        roiEl.className = 'font-mono text-2xl font-bold text-danger';
+        roiBox.className = 'flex justify-between items-center p-4 rounded-xl border-2 border-danger/40 bg-danger/5';
+        roiEl.className = 'font-mono text-2xl font-black text-danger';
       }
 
       const progress = breakeven > 0 ? Math.min((convs / breakeven) * 100, 100) : 0;
       const bar = document.getElementById('r_bar') as HTMLElement;
       bar.style.width = `${progress}%`;
-      bar.style.backgroundColor = progress >= 100 ? '#22c55e' : progress >= 50 ? '#f59e0b' : '#ef4444';
+      bar.style.backgroundColor = progress >= 100 ? '#22c55e' : progress >= 50 ? '#f59e0b' : '#e11d48';
       document.getElementById('r_progress_label')!.textContent = `${Math.round(progress)}%`;
     }
 
-    document.querySelectorAll('.calc-input').forEach(el => {
-      el.addEventListener('input', calculate);
-    });
-
+    document.querySelectorAll('.calc-input').forEach(el => el.addEventListener('input', calculate));
     calculate();
   </script>
 </Layout>
