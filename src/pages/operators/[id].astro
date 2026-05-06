@@ -1,7 +1,6 @@
 ---
 import Layout from '../../components/Layout.astro';
 import { supabase } from '../../lib/supabase';
-import type { Operator } from '../../lib/types';
 
 const { id } = Astro.params;
 const trafficOptions = ['Meta Ads', 'InApp', 'DSP', 'Google Ads', 'TikTok Ads'];
@@ -17,16 +16,20 @@ if (Astro.request.method === 'POST') {
   const geo = geoRaw.split(',').map(g => g.trim().toUpperCase()).filter(Boolean);
   const traffic = trafficOptions.filter(t => form.get(`traffic_${t}`));
   const ratingRaw = form.get('rating') as string;
+  const dealType = form.get('deal_type') as string;
   await supabase.from('operators').update({
     name: form.get('name') as string,
     brand: (form.get('brand') as string) || null,
+    contact: (form.get('contact') as string) || null,
+    payment_method: (form.get('payment_method') as string) || null,
     target_geos: geo,
     budget_min: Number(form.get('budget_min')) || 0,
     budget_max: Number(form.get('budget_max')) || 0,
     preferred_traffic: traffic,
-    deal_type: (form.get('deal_type') as string) || 'CPA',
+    deal_type: dealType || 'CPA',
     cpa_value: Number(form.get('cpa_value')) || null,
     revshare_pct: Number(form.get('revshare_pct')) || null,
+    spend_pct: Number(form.get('spend_pct')) || null,
     rating: ratingRaw ? Number(ratingRaw) : null,
     notes: (form.get('notes') as string) || null,
   }).eq('id', id!);
@@ -35,7 +38,7 @@ if (Astro.request.method === 'POST') {
 
 const { data: operator } = await supabase.from('operators').select('*').eq('id', id!).single();
 if (!operator) return Astro.redirect('/operators');
-const op = operator as Operator;
+const op = operator as any;
 
 const inputCls = "w-full bg-card-2 border border-border rounded-lg px-4 py-2 text-gray-100 focus:border-accent focus:ring-1 focus:ring-accent outline-none placeholder-gray-600 transition-colors";
 ---
@@ -48,6 +51,8 @@ const inputCls = "w-full bg-card-2 border border-border rounded-lg px-4 py-2 tex
   </div>
 
   <form method="POST" class="bg-card rounded-xl border border-border p-6 max-w-2xl space-y-5">
+
+    <!-- Name + Brand -->
     <div class="grid grid-cols-2 gap-4">
       <div>
         <label class="block text-sm text-gray-400 mb-1">Name *</label>
@@ -59,22 +64,42 @@ const inputCls = "w-full bg-card-2 border border-border rounded-lg px-4 py-2 tex
       </div>
     </div>
 
+    <!-- Contact + Payment Method -->
+    <div class="grid grid-cols-2 gap-4">
+      <div>
+        <label class="block text-sm text-gray-400 mb-1">Contact <span class="text-gray-600">(TG / WhatsApp)</span></label>
+        <input type="text" name="contact" value={op.contact || ''} placeholder="@username or +380…" class={inputCls} />
+      </div>
+      <div>
+        <label class="block text-sm text-gray-400 mb-1">Payment Method</label>
+        <select name="payment_method" class={inputCls}>
+          <option value="">— Select —</option>
+          <option value="Bank Transfer" selected={op.payment_method === 'Bank Transfer'}>Bank Transfer</option>
+          <option value="Crypto" selected={op.payment_method === 'Crypto'}>Crypto</option>
+          <option value="Bank Transfer + Crypto" selected={op.payment_method === 'Bank Transfer + Crypto'}>Bank Transfer + Crypto</option>
+        </select>
+      </div>
+    </div>
+
+    <!-- Target GEOs -->
     <div>
       <label class="block text-sm text-gray-400 mb-1">Target GEOs <span class="text-gray-600">(comma-separated)</span></label>
       <input type="text" name="target_geos" value={(op.target_geos ?? []).join(', ')} class={inputCls} />
     </div>
 
+    <!-- Budget -->
     <div class="grid grid-cols-2 gap-4">
       <div>
-        <label class="block text-sm text-gray-400 mb-1">Budget Min (USD)</label>
-        <input type="number" name="budget_min" step="0.01" min="0" value={op.budget_min} class={inputCls} />
+        <label class="block text-sm text-gray-400 mb-1">Budget Min (USD/mo)</label>
+        <input type="number" name="budget_min" step="100" min="0" value={op.budget_min} class={inputCls} />
       </div>
       <div>
-        <label class="block text-sm text-gray-400 mb-1">Budget Max (USD)</label>
-        <input type="number" name="budget_max" step="0.01" min="0" value={op.budget_max} class={inputCls} />
+        <label class="block text-sm text-gray-400 mb-1">Budget Max (USD/mo)</label>
+        <input type="number" name="budget_max" step="100" min="0" value={op.budget_max} class={inputCls} />
       </div>
     </div>
 
+    <!-- Traffic Types -->
     <div>
       <label class="block text-sm text-gray-400 mb-2">Preferred Traffic Types</label>
       <div class="flex flex-wrap gap-3">
@@ -88,25 +113,35 @@ const inputCls = "w-full bg-card-2 border border-border rounded-lg px-4 py-2 tex
       </div>
     </div>
 
-    <div class="grid grid-cols-3 gap-4">
-      <div>
-        <label class="block text-sm text-gray-400 mb-1">Deal Type</label>
-        <select name="deal_type" class={inputCls}>
-          <option value="CPA" selected={op.deal_type === 'CPA'}>CPA</option>
-          <option value="RevShare" selected={op.deal_type === 'RevShare'}>RevShare</option>
-          <option value="Hybrid" selected={op.deal_type === 'Hybrid'}>Hybrid</option>
-        </select>
-      </div>
-      <div>
-        <label class="block text-sm text-gray-400 mb-1">CPA Value (USD)</label>
-        <input type="number" name="cpa_value" step="0.01" min="0" value={op.cpa_value || ''} class={inputCls} />
-      </div>
-      <div>
-        <label class="block text-sm text-gray-400 mb-1">RevShare %</label>
-        <input type="number" name="revshare_pct" step="0.01" min="0" max="100" value={op.revshare_pct || ''} class={inputCls} />
+    <!-- Deal Type + Dynamic Value -->
+    <div>
+      <label class="block text-sm text-gray-400 mb-2">Deal Terms (operator pays us)</label>
+      <div class="grid grid-cols-2 gap-4">
+        <div>
+          <label class="block text-xs text-gray-500 mb-1">Deal Type</label>
+          <select name="deal_type" id="deal_type" class={inputCls}>
+            <option value="CPA" selected={op.deal_type === 'CPA'}>CPA</option>
+            <option value="RevShare" selected={op.deal_type === 'RevShare'}>RevShare</option>
+            <option value="Spend" selected={op.deal_type === 'Spend'}>% of Spend</option>
+            <option value="Hybrid" selected={op.deal_type === 'Hybrid'}>Hybrid (CPA + RevShare)</option>
+          </select>
+        </div>
+        <div id="cpa-group" class={op.deal_type === 'RevShare' || op.deal_type === 'Spend' ? 'hidden' : ''}>
+          <label class="block text-xs text-gray-500 mb-1">CPA Value ($)</label>
+          <input type="number" name="cpa_value" step="0.01" min="0" value={op.cpa_value || ''} placeholder="50" class={inputCls} />
+        </div>
+        <div id="rev-group" class={op.deal_type === 'CPA' || op.deal_type === 'Spend' ? 'hidden' : ''}>
+          <label class="block text-xs text-gray-500 mb-1">RevShare %</label>
+          <input type="number" name="revshare_pct" step="0.01" min="0" max="100" value={op.revshare_pct || ''} placeholder="30" class={inputCls} />
+        </div>
+        <div id="spend-group" class={op.deal_type !== 'Spend' ? 'hidden' : ''}>
+          <label class="block text-xs text-gray-500 mb-1">% of Spend</label>
+          <input type="number" name="spend_pct" step="0.01" min="0" max="100" value={op.spend_pct || ''} placeholder="15" class={inputCls} />
+        </div>
       </div>
     </div>
 
+    <!-- Rating -->
     <div>
       <label class="block text-sm text-gray-400 mb-1">Rating <span class="text-gray-600">(1–10)</span></label>
       <input type="number" name="rating" id="rating_input" min="1" max="10" value={op.rating ?? ''} placeholder="e.g. 8" class={inputCls} />
@@ -121,6 +156,7 @@ const inputCls = "w-full bg-card-2 border border-border rounded-lg px-4 py-2 tex
       </div>
     </div>
 
+    <!-- Notes -->
     <div>
       <label class="block text-sm text-gray-400 mb-1">Notes</label>
       <textarea name="notes" rows="3" class={`${inputCls} resize-none`}>{op.notes || ''}</textarea>
@@ -140,6 +176,19 @@ const inputCls = "w-full bg-card-2 border border-border rounded-lg px-4 py-2 tex
 </Layout>
 
 <script>
+  const dealType = document.getElementById('deal_type') as HTMLSelectElement;
+  const cpaGroup = document.getElementById('cpa-group')!;
+  const revGroup = document.getElementById('rev-group')!;
+  const spendGroup = document.getElementById('spend-group')!;
+
+  function updateDealFields() {
+    const v = dealType.value;
+    cpaGroup.classList.toggle('hidden', v === 'RevShare' || v === 'Spend');
+    revGroup.classList.toggle('hidden', v === 'CPA' || v === 'Spend');
+    spendGroup.classList.toggle('hidden', v !== 'Spend');
+  }
+  dealType.addEventListener('change', updateDealFields);
+
   const input = document.getElementById('rating_input') as HTMLInputElement;
   const dots = document.querySelectorAll('.rating-dot');
   function updateDots(val: number) {
