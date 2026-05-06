@@ -23,9 +23,11 @@ function isActive(href: string): boolean {
 
 <aside class="fixed left-0 top-0 h-screen w-60 bg-card border-r border-border flex flex-col" style="box-shadow: 4px 0 24px rgba(225,29,72,0.06);">
   <div class="p-6 border-b border-border flex items-center gap-3">
-    <img src="/logo.png" alt="ADvantage" class="h-7 brightness-0 invert" id="nav-logo" />
-    <div id="logo-fallback">
-      <span class="text-accent font-black text-lg tracking-tight">AD</span><span class="text-white font-black text-lg tracking-tight">VANTAGE</span>
+    <div class="flex items-center gap-1">
+      <div class="w-7 h-7 bg-accent rounded-md flex items-center justify-center shrink-0">
+        <span class="text-white font-black text-xs leading-none">AD</span>
+      </div>
+      <span class="text-white font-black text-lg tracking-tight ml-1">vantage</span>
     </div>
   </div>
   <nav class="flex-1 p-4 space-y-1 overflow-y-auto">
@@ -48,15 +50,3 @@ function isActive(href: string): boolean {
   </div>
 </aside>
 
-<script>
-  const img = document.getElementById('nav-logo') as HTMLImageElement;
-  const fallback = document.getElementById('logo-fallback');
-  if (img && fallback) {
-    if (img.complete && img.naturalWidth > 0) {
-      fallback.style.display = 'none';
-    } else {
-      img.onload = () => { fallback!.style.display = 'none'; };
-      img.onerror = () => { img.style.display = 'none'; };
-    }
-  }
-</script>

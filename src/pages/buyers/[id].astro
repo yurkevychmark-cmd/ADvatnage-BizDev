@@ -4,7 +4,7 @@ import { supabase } from '../../lib/supabase';
 import type { Buyer } from '../../lib/types';
 
 const { id } = Astro.params;
-const trafficOptions = ['PPC', 'SEO', 'Social', 'Push', 'Native', 'Email', 'Display', 'Streaming'];
+const trafficOptions = ['Meta Ads', 'InApp', 'DSP', 'Google Ads', 'TikTok Ads'];
 
 if (Astro.request.method === 'POST') {
   const form = await Astro.request.formData();
