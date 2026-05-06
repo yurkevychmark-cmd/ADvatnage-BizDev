@@ -1,0 +1,117 @@
+---
+import Layout from '../components/Layout.astro';
+import StatCard from '../components/StatCard.astro';
+import ScoreBadge from '../components/ScoreBadge.astro';
+import GeoTag from '../components/GeoTag.astro';
+import { supabase } from '../lib/supabase';
+
+const { count: buyerCount } = await supabase.from('buyers').select('*', { count: 'exact', head: true });
+const { count: operatorCount } = await supabase.from('operators').select('*', { count: 'exact', head: true });
+const { count: matchCount } = await supabase.from('matches').select('*', { count: 'exact', head: true });
+const { count: projectCount } = await supabase.from('projects').select('*', { count: 'exact', head: true });
+
+const { data: recentMatches } = await supabase
+  .from('matches')
+  .select('*, buyer:buyers(*), operator:operators(*)')
+  .order('score', { ascending: false })
+  .limit(5);
+
+const { data: recentProjects } = await supabase
+  .from('projects')
+  .select('*')
+  .order('created_at', { ascending: false })
+  .limit(5);
+---
+
+<Layout title="Dashboard">
+  <div class="mb-8">
+    <h1 class="text-2xl font-bold">Dashboard</h1>
+    <p class="text-gray-600 text-sm mt-1">Overview of your matchmaking pipeline</p>
+  </div>
+
+  <div class="grid grid-cols-4 gap-4 mb-8">
+    <StatCard label="Buyers" value={buyerCount ?? 0} />
+    <StatCard label="Operators" value={operatorCount ?? 0} />
+    <StatCard label="Matches" value={matchCount ?? 0} />
+    <StatCard label="Projects" value={projectCount ?? 0} />
+  </div>
+
+  <div class="flex gap-3 mb-8">
+    <a href="/buyers/add" class="bg-accent hover:bg-accent-dark text-white text-sm font-medium px-5 py-2.5 rounded-lg transition-colors shadow-lg shadow-accent/20">
+      + Add Buyer
+    </a>
+    <a href="/operators/add" class="bg-accent hover:bg-accent-dark text-white text-sm font-medium px-5 py-2.5 rounded-lg transition-colors shadow-lg shadow-accent/20">
+      + Add Operator
+    </a>
+    <a href="/matchmaking" class="bg-card-2 hover:bg-border text-gray-300 hover:text-white text-sm font-medium px-5 py-2.5 rounded-lg transition-colors border border-border">
+      Run Matchmaking
+    </a>
+  </div>
+
+  <div class="grid grid-cols-2 gap-6">
+    <div class="bg-card rounded-xl border border-border p-6">
+      <h2 class="text-base font-semibold mb-4 flex items-center gap-2">
+        <span class="w-1.5 h-4 bg-accent rounded-full inline-block"></span>
+        Top Matches
+      </h2>
+      {(!recentMatches || recentMatches.length === 0) ? (
+        <p class="text-gray-600 text-sm">No matches yet. Add buyers and operators, then run matchmaking.</p>
+      ) : (
+        <div class="space-y-2">
+          {recentMatches.map((m: any) => (
+            <div class="flex items-center justify-between p-3 bg-card-2 rounded-lg border border-border hover:border-accent/30 transition-colors">
+              <div>
+                <div class="text-sm">
+                  <span class="font-medium">{m.buyer?.name}</span>
+                  <span class="text-gray-600 mx-2">↔</span>
+                  <span class="font-medium">{m.operator?.name}</span>
+                </div>
+                <div class="flex gap-1 mt-1">
+                  {(m.geo_overlap ?? []).map((g: string) => <GeoTag code={g} />)}
+                </div>
+              </div>
+              <ScoreBadge score={m.score} />
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+
+    <div class="bg-card rounded-xl border border-border p-6">
+      <h2 class="text-base font-semibold mb-4 flex items-center gap-2">
+        <span class="w-1.5 h-4 bg-accent rounded-full inline-block"></span>
+        Recent Projects
+      </h2>
+      {(!recentProjects || recentProjects.length === 0) ? (
+        <p class="text-gray-600 text-sm">No projects yet. Use the calculator to create one.</p>
+      ) : (
+        <table class="w-full text-sm">
+          <thead>
+            <tr class="text-gray-600 text-xs uppercase tracking-wide">
+              <th class="text-left pb-3">Name</th>
+              <th class="text-left pb-3">Status</th>
+              <th class="text-right pb-3">ROI</th>
+            </tr>
+          </thead>
+          <tbody>
+            {recentProjects.map((p: any) => (
+              <tr class="border-t border-border">
+                <td class="py-2.5 text-gray-300">{p.name}</td>
+                <td class="py-2.5">
+                  <span class={`text-xs px-2 py-0.5 rounded border ${
+                    p.status === 'active' ? 'bg-success/15 text-success border-success/30' :
+                    p.status === 'completed' ? 'bg-accent/15 text-accent border-accent/30' :
+                    'bg-card-2 text-gray-500 border-border'
+                  }`}>{p.status}</span>
+                </td>
+                <td class={`py-2.5 text-right font-mono font-semibold ${p.calc_roi >= 0 ? 'text-success' : 'text-danger'}`}>
+                  {p.calc_roi != null ? `${p.calc_roi}%` : '—'}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+    </div>
+  </div>
+</Layout>
