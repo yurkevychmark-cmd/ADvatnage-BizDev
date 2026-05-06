@@ -9,7 +9,6 @@
   },
   "dependencies": {
     "@astrojs/check": "^0.9.9",
-    "@astrojs/node": "^9.0.0",
     "@astrojs/tailwind": "^6.0.0",
     "@astrojs/vercel": "^9.0.5",
     "@supabase/supabase-js": "^2.45.0",
