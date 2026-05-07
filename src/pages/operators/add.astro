@@ -17,7 +17,7 @@ if (Astro.request.method === 'POST') {
   const links = linksRaw.map(l => l.trim()).filter(Boolean);
   const { error } = await supabase.from('operators').insert({
     name: form.get('name') as string,
-    brand: (form.get('brand') as string) || null,
+    brand_name: (form.get('brand') as string) || null,
     contact: (form.get('contact') as string) || null,
     payment_method: (form.get('payment_method') as string) || null,
     target_geos: geo,

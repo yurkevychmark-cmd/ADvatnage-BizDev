@@ -86,7 +86,7 @@ const dealTypeBadge: Record<string, string> = {
               class="op-row grid grid-cols-[1.5rem_2fr_1.5fr_1.5fr_1fr_1fr_1.5fr_1fr_auto] gap-4 px-5 py-4 border-b border-border last:border-0 hover:bg-card-2/50 transition-colors items-center cursor-pointer"
               draggable="true"
               data-id={op.id}
-              data-name={`${op.name ?? ''} ${op.brand ?? ''}`.toLowerCase()}
+              data-name={`${op.name ?? ''} ${op.brand_name ?? ''}`.toLowerCase()}
               data-deal={dtype.toLowerCase()}
               data-geo={geos.join(' ').toLowerCase()}
               onclick={`window.location='/operators/${op.id}'`}
@@ -97,8 +97,8 @@ const dealTypeBadge: Record<string, string> = {
               <!-- Name / Brand -->
               <div class="min-w-0">
                 <p class="font-medium text-sm truncate">{op.name ?? '—'}</p>
-                {op.brand && op.brand !== op.name && (
-                  <p class="text-xs text-gray-600 truncate">{op.brand}</p>
+                {op.brand_name && op.brand_name !== op.name && (
+                  <p class="text-xs text-gray-600 truncate">{op.brand_name}</p>
                 )}
               </div>
 
@@ -251,7 +251,7 @@ const dealTypeBadge: Record<string, string> = {
   document.getElementById('export-csv')?.addEventListener('click', () => {
     const headers = ['Name','Brand','GEOs','Deal Type','CPA Value','RevShare %','Spend %','Budget Min','Budget Max','Rating','Notes'];
     const csvRows = operators.map(o => [
-      o.name ?? '', o.brand ?? '',
+      o.name ?? '', o.brand_name ?? '',
       (o.target_geos ?? []).join(';'), o.deal_type ?? '',
       o.cpa_value ?? '', o.revshare_pct ?? '', o.spend_pct ?? '',
       o.budget_min ?? '', o.budget_max ?? '',

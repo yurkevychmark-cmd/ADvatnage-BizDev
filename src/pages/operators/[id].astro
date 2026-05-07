@@ -21,7 +21,7 @@ if (Astro.request.method === 'POST') {
   const links = linksRaw.map(l => l.trim()).filter(Boolean);
   await supabase.from('operators').update({
     name: form.get('name') as string,
-    brand: (form.get('brand') as string) || null,
+    brand_name: (form.get('brand') as string) || null,
     contact: (form.get('contact') as string) || null,
     payment_method: (form.get('payment_method') as string) || null,
     target_geos: geo,
@@ -50,7 +50,7 @@ const inputCls = "w-full bg-card-2 border border-border rounded-lg px-4 py-2 tex
   <div class="mb-8">
     <a href="/operators" class="text-gray-600 hover:text-gray-300 text-sm transition-colors">&larr; Back to Operators</a>
     <h1 class="text-2xl font-bold mt-2">{op.name}</h1>
-    {op.brand && <p class="text-gray-500 text-sm">{op.brand}</p>}
+    {op.brand_name && <p class="text-gray-500 text-sm">{op.brand_name}</p>}
   </div>
 
   <form method="POST" class="bg-card rounded-xl border border-border p-6 max-w-2xl space-y-5">
@@ -63,7 +63,7 @@ const inputCls = "w-full bg-card-2 border border-border rounded-lg px-4 py-2 tex
       </div>
       <div>
         <label class="block text-sm text-gray-400 mb-1">Brand</label>
-        <input type="text" name="brand" value={op.brand || ''} class={inputCls} />
+        <input type="text" name="brand" value={op.brand_name || ''} class={inputCls} />
       </div>
     </div>
 

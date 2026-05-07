@@ -3,7 +3,7 @@ import { supabase } from '../../lib/supabase';
 
 export const POST: APIRoute = async ({ request }) => {
   const { table, ids } = await request.json();
-  if (!['buyers', 'operators'].includes(table)) {
+  if (!['buyers', 'operators', 'projects'].includes(table)) {
     return new Response(JSON.stringify({ error: 'Invalid table' }), { status: 400 });
   }
   await Promise.all(

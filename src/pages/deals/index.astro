@@ -61,6 +61,7 @@ const stageFilter = Astro.url.searchParams.get('stage') ?? 'all';
 const query = supabase
   .from('projects')
   .select('*, buyer:buyers(id,name), operator:operators(id,name,deal_type,cpa_value,revshare_pct,spend_pct)')
+  .order('sort_order', { ascending: true, nullsFirst: false })
   .order('created_at', { ascending: false });
 
 if (stageFilter !== 'all') query.eq('pipeline_stage', stageFilter);
@@ -239,7 +240,7 @@ const dealTypeLabel: Record<string, string> = { CPA: 'CPA', RevShare: 'RevShare'
       <p class="text-gray-700 text-sm">Click "+ New Deal" to connect a buyer with an operator.</p>
     </div>
   ) : (
-    <div class="space-y-3">
+    <div class="space-y-3" id="deals-list">
       {(deals as any[]).map(deal => {
         const rev = calcRevenue(deal);
         const net = calcNet(deal);
@@ -250,9 +251,10 @@ const dealTypeLabel: Record<string, string> = { CPA: 'CPA', RevShare: 'RevShare'
         const opValueLabel = dtype === 'CPA' ? `$${opValue}/conv` : `${opValue}%`;
 
         return (
-          <div class="bg-card rounded-xl border border-border hover:border-accent/20 transition-colors">
+          <div class="deal-card bg-card rounded-xl border border-border hover:border-accent/20 transition-colors" draggable="true" data-id={deal.id}>
             <!-- Header row -->
             <div class="flex items-center gap-4 p-5">
+              <div class="deal-drag-handle text-gray-700 hover:text-gray-400 cursor-grab active:cursor-grabbing select-none text-lg leading-none shrink-0" title="Drag to reorder">⠿</div>
               <div class="flex-1 min-w-0">
                 <div class="flex items-center gap-2 flex-wrap">
                   <span class="font-semibold">{deal.buyer?.name ?? '—'}</span>
@@ -407,4 +409,52 @@ const dealTypeLabel: Record<string, string> = { CPA: 'CPA', RevShare: 'RevShare'
       btn.textContent = expanded ? '⌄' : '⌃';
     });
   });
+
+  // ── Drag and drop ─────────────────────────────────────────────────────
+  const dealsList = document.getElementById('deals-list');
+  let dragSrc: Element | null = null;
+
+  if (dealsList) {
+    dealsList.addEventListener('dragstart', (e: DragEvent) => {
+      const card = (e.target as Element).closest('.deal-card');
+      if (!card) return;
+      dragSrc = card;
+      (card as HTMLElement).style.opacity = '0.4';
+      e.dataTransfer!.effectAllowed = 'move';
+    });
+
+    dealsList.addEventListener('dragend', (e: DragEvent) => {
+      const card = (e.target as Element).closest('.deal-card');
+      if (card) (card as HTMLElement).style.opacity = '';
+      dragSrc = null;
+      document.querySelectorAll('.deal-card').forEach(c => (c as HTMLElement).classList.remove('ring-2', 'ring-accent/50'));
+    });
+
+    dealsList.addEventListener('dragover', (e: DragEvent) => {
+      e.preventDefault();
+      e.dataTransfer!.dropEffect = 'move';
+      const card = (e.target as Element).closest('.deal-card');
+      document.querySelectorAll('.deal-card').forEach(c => c.classList.remove('ring-2', 'ring-accent/50'));
+      if (card && card !== dragSrc) card.classList.add('ring-2', 'ring-accent/50');
+    });
+
+    dealsList.addEventListener('drop', (e: DragEvent) => {
+      e.preventDefault();
+      const target = (e.target as Element).closest('.deal-card');
+      if (!target || target === dragSrc || !dragSrc) return;
+      document.querySelectorAll('.deal-card').forEach(c => c.classList.remove('ring-2', 'ring-accent/50'));
+      const rect = target.getBoundingClientRect();
+      if (e.clientY < rect.top + rect.height / 2) {
+        dealsList.insertBefore(dragSrc, target);
+      } else {
+        dealsList.insertBefore(dragSrc, target.nextSibling);
+      }
+      const ids = [...document.querySelectorAll('.deal-card')].map(c => (c as HTMLElement).dataset.id).filter(Boolean);
+      fetch('/api/reorder', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ table: 'projects', ids }),
+      });
+    });
+  }
 </script>
