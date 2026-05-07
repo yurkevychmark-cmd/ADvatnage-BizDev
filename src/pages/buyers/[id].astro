@@ -27,6 +27,7 @@ if (Astro.request.method === 'POST') {
     traffic_types: traffic,
     monthly_budget_capacity: Number(form.get('monthly_budget_capacity')) || 0,
     cooperation_model: (form.get('cooperation_model') as string) || null,
+    cooperation_model_value: Number(form.get('cooperation_model_value')) || null,
     rating: ratingRaw ? Number(ratingRaw) : null,
     notes: (form.get('notes') as string) || null,
   }).eq('id', id!);
@@ -104,15 +105,24 @@ const inputCls = "w-full bg-card-2 border border-border rounded-lg px-4 py-2 tex
       </div>
     </div>
 
-    <!-- Cooperation Model + Budget + Rating -->
-    <div class="grid grid-cols-3 gap-4">
+    <!-- Cooperation Model + Value + Budget + Rating -->
+    <div class="grid grid-cols-2 gap-4">
       <div>
         <label class="block text-sm text-gray-400 mb-1">Cooperation Model</label>
-        <select name="cooperation_model" class={inputCls}>
+        <select name="cooperation_model" id="coop_model" class={inputCls}>
           <option value="">— Select —</option>
           {coopOptions.map(o => <option value={o} selected={b.cooperation_model === o}>{o}</option>)}
         </select>
       </div>
+      <div id="coop-value-group" class={!b.cooperation_model ? 'hidden' : ''}>
+        <label class="block text-sm text-gray-400 mb-1" id="coop-value-label">
+          {b.cooperation_model === 'CPA' ? 'CPA виплата ($)' : 'Значення (%)'}
+        </label>
+        <input type="number" name="cooperation_model_value" id="coop_model_value" step="0.01" min="0"
+          value={b.cooperation_model_value ?? ''} placeholder="5" class={inputCls} />
+      </div>
+    </div>
+    <div class="grid grid-cols-2 gap-4">
       <div>
         <label class="block text-sm text-gray-400 mb-1">Monthly Budget (USD)</label>
         <input type="number" name="monthly_budget_capacity" step="0.01" min="0" value={b.monthly_budget_capacity} class={inputCls} />
@@ -152,6 +162,18 @@ const inputCls = "w-full bg-card-2 border border-border rounded-lg px-4 py-2 tex
 </Layout>
 
 <script>
+  // Cooperation model value toggle
+  const coopModel = document.getElementById('coop_model') as HTMLSelectElement;
+  const coopValueGroup = document.getElementById('coop-value-group')!;
+  const coopValueLabel = document.getElementById('coop-value-label')!;
+  function updateCoopValue() {
+    const v = coopModel.value;
+    if (!v) { coopValueGroup.classList.add('hidden'); return; }
+    coopValueGroup.classList.remove('hidden');
+    coopValueLabel.textContent = v === 'CPA' ? 'CPA виплата ($)' : 'Значення (%)';
+  }
+  coopModel.addEventListener('change', updateCoopValue);
+
   const input = document.getElementById('rating_input') as HTMLInputElement;
   const dots = document.querySelectorAll('.rating-dot');
   function updateDots(val: number) {
