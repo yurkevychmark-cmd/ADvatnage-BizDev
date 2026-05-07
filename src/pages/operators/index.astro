@@ -5,6 +5,7 @@ import { supabase } from '../../lib/supabase';
 const { data: operators } = await supabase
   .from('operators')
   .select('*')
+  .order('sort_order', { ascending: true, nullsFirst: false })
   .order('created_at', { ascending: false });
 
 const operatorsJson = JSON.stringify(operators ?? []);
@@ -55,7 +56,8 @@ const dealTypeBadge: Record<string, string> = {
   ) : (
     <div class="bg-card rounded-xl border border-border overflow-hidden">
       <!-- Table header -->
-      <div class="grid grid-cols-[2fr_1.5fr_1.5fr_1fr_1fr_1.5fr_1fr_auto] gap-4 px-5 py-3 border-b border-border bg-card-2 text-xs text-gray-500 uppercase tracking-wide font-medium">
+      <div class="grid grid-cols-[1.5rem_2fr_1.5fr_1.5fr_1fr_1fr_1.5fr_1fr_auto] gap-4 px-5 py-3 border-b border-border bg-card-2 text-xs text-gray-500 uppercase tracking-wide font-medium">
+        <div></div>
         <div>Name / Brand</div>
         <div>Contact</div>
         <div>GEOs</div>
@@ -74,22 +76,27 @@ const dealTypeBadge: Record<string, string> = {
           const terms = dtype === 'CPA'
             ? (op.cpa_value ? `$${op.cpa_value}/conv` : '—')
             : dtype === 'Spend'
-              ? (op.spend_pct ?? op.revshare_pct ? `${op.spend_pct ?? op.revshare_pct}%` : '—')
+              ? (op.spend_pct ? `${op.spend_pct}%` : '—')
               : dtype === 'Hybrid'
                 ? [op.cpa_value ? `$${op.cpa_value}` : null, op.revshare_pct ? `${op.revshare_pct}%` : null].filter(Boolean).join(' + ') || '—'
                 : (op.revshare_pct ? `${op.revshare_pct}%` : '—');
 
           return (
             <div
-              class="op-row grid grid-cols-[2fr_1.5fr_1.5fr_1fr_1fr_1.5fr_1fr_auto] gap-4 px-5 py-4 border-b border-border last:border-0 hover:bg-card-2/50 transition-colors items-center cursor-pointer"
+              class="op-row grid grid-cols-[1.5rem_2fr_1.5fr_1.5fr_1fr_1fr_1.5fr_1fr_auto] gap-4 px-5 py-4 border-b border-border last:border-0 hover:bg-card-2/50 transition-colors items-center cursor-pointer"
+              draggable="true"
+              data-id={op.id}
               data-name={`${op.name ?? ''} ${op.brand ?? ''}`.toLowerCase()}
-              data-deal={(dtype).toLowerCase()}
-              data-geo={(geos).join(' ').toLowerCase()}
+              data-deal={dtype.toLowerCase()}
+              data-geo={geos.join(' ').toLowerCase()}
               onclick={`window.location='/operators/${op.id}'`}
             >
+              <!-- Drag handle -->
+              <div class="drag-handle text-gray-700 hover:text-gray-400 cursor-grab active:cursor-grabbing select-none text-base leading-none" title="Drag to reorder" onclick="event.stopPropagation()">⠿</div>
+
               <!-- Name / Brand -->
               <div class="min-w-0">
-                <p class="font-medium text-sm truncate">{op.name ?? op.brand_name ?? '—'}</p>
+                <p class="font-medium text-sm truncate">{op.name ?? '—'}</p>
                 {op.brand && op.brand !== op.name && (
                   <p class="text-xs text-gray-600 truncate">{op.brand}</p>
                 )}
@@ -143,7 +150,7 @@ const dealTypeBadge: Record<string, string> = {
                 )}
               </div>
 
-              <!-- Edit arrow -->
+              <!-- Arrow -->
               <div class="text-gray-600 text-sm">›</div>
             </div>
           );
@@ -159,24 +166,26 @@ const dealTypeBadge: Record<string, string> = {
 
 <script define:vars={{ operatorsJson }}>
   const operators = JSON.parse(operatorsJson);
-  const rows = document.querySelectorAll('.op-row');
+  const table = document.getElementById('op-table');
+  const rows = () => [...document.querySelectorAll('.op-row')];
   const countEl = document.getElementById('count');
   const emptyFilter = document.getElementById('empty-filter');
 
+  // ── Filters ───────────────────────────────────────────────────────────
   function applyFilters() {
     const search = document.getElementById('search').value.toLowerCase();
     const deal = document.getElementById('filter-deal').value.toLowerCase();
     let visible = 0;
-    rows.forEach(row => {
+    rows().forEach(row => {
       const name = row.dataset.name ?? '';
-      const rowDeal = row.dataset.deal ?? '';
       const geo = row.dataset.geo ?? '';
+      const rowDeal = row.dataset.deal ?? '';
       const ok = (!search || name.includes(search) || geo.includes(search)) &&
                  (!deal || rowDeal === deal);
       row.style.display = ok ? '' : 'none';
       if (ok) visible++;
     });
-    countEl.textContent = `${visible} of ${rows.length}`;
+    countEl.textContent = `${visible} of ${rows().length}`;
     emptyFilter.classList.toggle('hidden', visible > 0);
   }
 
@@ -185,17 +194,70 @@ const dealTypeBadge: Record<string, string> = {
   );
   applyFilters();
 
+  // ── Drag and drop ─────────────────────────────────────────────────────
+  let dragSrc = null;
+
+  if (table) {
+    table.addEventListener('dragstart', e => {
+      const row = e.target.closest('.op-row');
+      if (!row) return;
+      dragSrc = row;
+      row.style.opacity = '0.4';
+      e.dataTransfer.effectAllowed = 'move';
+    });
+
+    table.addEventListener('dragend', e => {
+      const row = e.target.closest('.op-row');
+      if (row) row.style.opacity = '';
+      dragSrc = null;
+      rows().forEach(r => r.classList.remove('ring-2', 'ring-inset', 'ring-accent/50', 'bg-accent/5'));
+    });
+
+    table.addEventListener('dragover', e => {
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'move';
+      const row = e.target.closest('.op-row');
+      rows().forEach(r => r.classList.remove('bg-accent/5'));
+      if (row && row !== dragSrc) row.classList.add('bg-accent/5');
+    });
+
+    table.addEventListener('drop', e => {
+      e.preventDefault();
+      const target = e.target.closest('.op-row');
+      if (!target || target === dragSrc || !dragSrc) return;
+      rows().forEach(r => r.classList.remove('bg-accent/5'));
+
+      const rect = target.getBoundingClientRect();
+      const mid = rect.top + rect.height / 2;
+      if (e.clientY < mid) {
+        table.insertBefore(dragSrc, target);
+      } else {
+        table.insertBefore(dragSrc, target.nextSibling);
+      }
+      saveOrder();
+    });
+  }
+
+  function saveOrder() {
+    const ids = rows().map(r => r.dataset.id).filter(Boolean);
+    fetch('/api/reorder', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ table: 'operators', ids }),
+    });
+  }
+
+  // ── CSV export ────────────────────────────────────────────────────────
   document.getElementById('export-csv')?.addEventListener('click', () => {
     const headers = ['Name','Brand','GEOs','Deal Type','CPA Value','RevShare %','Spend %','Budget Min','Budget Max','Rating','Notes'];
-    const rows = operators.map(o => [
+    const csvRows = operators.map(o => [
       o.name ?? '', o.brand ?? '',
-      (o.target_geos ?? []).join(';'),
-      o.deal_type ?? '',
+      (o.target_geos ?? []).join(';'), o.deal_type ?? '',
       o.cpa_value ?? '', o.revshare_pct ?? '', o.spend_pct ?? '',
       o.budget_min ?? '', o.budget_max ?? '',
       o.rating ?? '', (o.notes ?? '').replace(/\n/g, ' '),
     ]);
-    const csv = [headers, ...rows].map(r => r.map(v => `"${String(v).replace(/"/g, '""')}"`).join(',')).join('\n');
+    const csv = [headers, ...csvRows].map(r => r.map(v => `"${String(v).replace(/"/g, '""')}"`).join(',')).join('\n');
     const a = document.createElement('a');
     a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv' }));
     a.download = 'operators.csv';

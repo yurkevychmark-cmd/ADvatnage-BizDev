@@ -28,7 +28,10 @@ if (Astro.request.method === 'POST') {
     notes: (form.get('notes') as string) || null,
     worked_with: form.get('worked_with') === 'on',
   });
-  if (!error) return Astro.redirect('/buyers');
+  if (!error) {
+    await supabase.from('activity_log').insert({ entity_type: 'buyer', entity_name: form.get('name') as string, action: 'created' });
+    return Astro.redirect('/buyers');
+  }
   dbError = error.message;
 }
 

@@ -32,7 +32,10 @@ if (Astro.request.method === 'POST') {
     notes: (form.get('notes') as string) || null,
     links: links.length > 0 ? links : null,
   });
-  if (!error) return Astro.redirect('/operators');
+  if (!error) {
+    await supabase.from('activity_log').insert({ entity_type: 'operator', entity_name: form.get('name') as string, action: 'created' });
+    return Astro.redirect('/operators');
+  }
   dbError = error.message;
 }
 

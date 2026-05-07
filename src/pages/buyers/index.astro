@@ -9,6 +9,7 @@ import type { Buyer } from '../../lib/types';
 const { data: buyers } = await supabase
   .from('buyers')
   .select('*')
+  .order('sort_order', { ascending: true, nullsFirst: false })
   .order('created_at', { ascending: false });
 
 const buyersJson = JSON.stringify(buyers ?? []);
@@ -55,10 +56,6 @@ const buyersJson = JSON.stringify(buyers ?? []);
       <option value="5">5+ (Good)</option>
       <option value="1">Rated</option>
     </select>
-    <label class="flex items-center gap-2 bg-card border border-border rounded-lg px-4 py-2 text-sm text-gray-300 cursor-pointer select-none hover:border-accent/50 transition-colors">
-      <input type="checkbox" id="filter-worked" class="accent-accent rounded" />
-      Worked with
-    </label>
     <span id="count" class="self-center text-xs text-gray-600 font-mono"></span>
   </div>
 
@@ -69,63 +66,79 @@ const buyersJson = JSON.stringify(buyers ?? []);
     </div>
   ) : (
     <div id="grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-      {(buyers as Buyer[]).map(buyer => (
-        <a
-          href={`/buyers/${buyer.id}`}
-          class="buyer-card bg-card rounded-xl border border-border p-6 hover:border-accent/40 transition-all group block relative overflow-hidden"
-          data-name={`${buyer.name} ${buyer.contact_name ?? ''}`.toLowerCase()}
-          data-geo={(buyer.geo_expertise ?? []).join(' ').toLowerCase()}
-          data-traffic={(buyer.traffic_types ?? []).join(' ').toLowerCase()}
-          data-rating={buyer.rating ?? ''}
-          data-type={(buyer as any).type ?? 'EXTERNAL'}
-          data-worked={(buyer as any).worked_with ? '1' : '0'}
-        >
-          <div class="absolute inset-0 bg-gradient-to-br from-accent/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none"></div>
+      {(buyers as Buyer[]).map(buyer => {
+        const bAny = buyer as any;
+        const workedWith = bAny.worked_with === true;
+        return (
+          <div
+            class="buyer-card bg-card rounded-xl border border-border hover:border-accent/40 transition-all group relative overflow-hidden cursor-pointer"
+            draggable="true"
+            data-id={buyer.id}
+            data-name={`${buyer.name} ${buyer.contact_name ?? ''}`.toLowerCase()}
+            data-geo={(buyer.geo_expertise ?? []).join(' ').toLowerCase()}
+            data-traffic={(buyer.traffic_types ?? []).join(' ').toLowerCase()}
+            data-rating={buyer.rating ?? ''}
+            data-type={bAny.type ?? 'EXTERNAL'}
+          >
+            <div class="absolute inset-0 bg-gradient-to-br from-accent/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none"></div>
 
-          <!-- Header row: name + budget -->
-          <div class="flex items-start justify-between mb-2">
-            <div class="flex-1 min-w-0">
-              <div class="flex items-center gap-2 flex-wrap">
-                <h3 class="font-semibold group-hover:text-accent transition-colors truncate">{buyer.name}</h3>
-                {(buyer as any).worked_with && (
-                  <span class="inline-flex items-center gap-1 text-xs text-success bg-success/10 border border-success/20 rounded-full px-2 py-0.5 shrink-0" title="Worked with before">
-                    ✓ Worked with
-                  </span>
-                )}
+            <!-- Drag handle -->
+            <div class="drag-handle absolute top-3 left-3 text-gray-700 group-hover:text-gray-500 cursor-grab select-none z-10 opacity-0 group-hover:opacity-100 transition-opacity text-lg leading-none" title="Drag to reorder">⠿</div>
+
+            <!-- Worked-with toggle button -->
+            <button
+              class={`worked-btn absolute top-3 right-3 z-10 flex items-center gap-1 text-xs px-2 py-1 rounded-full border transition-all ${
+                workedWith
+                  ? 'bg-success/15 text-success border-success/30 hover:bg-success/25'
+                  : 'bg-card-2 text-gray-600 border-border hover:text-gray-400 hover:border-gray-500'
+              }`}
+              data-id={buyer.id}
+              data-worked={workedWith ? '1' : '0'}
+              title={workedWith ? 'Mark as not worked with' : 'Mark as worked with'}
+            >
+              {workedWith ? '✓ Worked' : '○ Not worked'}
+            </button>
+
+            <!-- Main clickable area → edit page -->
+            <a href={`/buyers/${buyer.id}`} class="block p-6 pt-10">
+              <div class="flex items-start justify-between mb-2">
+                <div class="flex-1 min-w-0 pr-2">
+                  <h3 class="font-semibold group-hover:text-accent transition-colors truncate">{buyer.name}</h3>
+                  {buyer.contact_name && <p class="text-gray-500 text-xs mt-0.5">{buyer.contact_name}</p>}
+                </div>
+                <span class="text-xs font-mono bg-card-2 border border-border px-2 py-1 rounded text-gray-400 shrink-0">
+                  ${Number(buyer.monthly_budget_capacity || 0).toLocaleString()}
+                </span>
               </div>
-              {buyer.contact_name && <p class="text-gray-500 text-xs mt-0.5">{buyer.contact_name}</p>}
-            </div>
-            <span class="text-xs font-mono bg-card-2 border border-border px-2 py-1 rounded text-gray-400 ml-2 shrink-0">
-              ${Number(buyer.monthly_budget_capacity || 0).toLocaleString()}
-            </span>
-          </div>
 
-          <!-- Type badge -->
-          <div class="mb-3">
-            <span class={`inline-block text-xs font-medium px-2 py-0.5 rounded border ${
-              (buyer as any).type === 'INTERNAL'
-                ? 'bg-blue-500/10 text-blue-400 border-blue-500/20'
-                : 'bg-gray-500/10 text-gray-400 border-gray-500/20'
-            }`}>
-              {(buyer as any).type === 'INTERNAL' ? 'Internal' : 'External'}
-            </span>
-          </div>
+              <!-- Type badge -->
+              <div class="mb-3">
+                <span class={`inline-block text-xs font-medium px-2 py-0.5 rounded border ${
+                  bAny.type === 'INTERNAL'
+                    ? 'bg-blue-500/10 text-blue-400 border-blue-500/20'
+                    : 'bg-gray-500/10 text-gray-400 border-gray-500/20'
+                }`}>
+                  {bAny.type === 'INTERNAL' ? 'Internal' : 'External'}
+                </span>
+              </div>
 
-          {buyer.rating != null && (
-            <div class="mb-3">
-              <RatingBadge rating={buyer.rating} />
-            </div>
-          )}
+              {buyer.rating != null && (
+                <div class="mb-3">
+                  <RatingBadge rating={buyer.rating} />
+                </div>
+              )}
 
-          <div class="flex flex-wrap gap-1 mb-2">
-            {(buyer.geo_expertise ?? []).map(g => <GeoTag code={g} />)}
-            {(buyer.geo_expertise ?? []).length === 0 && <span class="text-gray-700 text-xs italic">No GEOs set</span>}
+              <div class="flex flex-wrap gap-1 mb-2">
+                {(buyer.geo_expertise ?? []).map(g => <GeoTag code={g} />)}
+                {(buyer.geo_expertise ?? []).length === 0 && <span class="text-gray-700 text-xs italic">No GEOs set</span>}
+              </div>
+              <div class="flex flex-wrap gap-1">
+                {(buyer.traffic_types ?? []).map(t => <TrafficTag type={t} />)}
+              </div>
+            </a>
           </div>
-          <div class="flex flex-wrap gap-1">
-            {(buyer.traffic_types ?? []).map(t => <TrafficTag type={t} />)}
-          </div>
-        </a>
-      ))}
+        );
+      })}
     </div>
   )}
 
@@ -136,70 +149,137 @@ const buyersJson = JSON.stringify(buyers ?? []);
 
 <script define:vars={{ buyersJson }}>
   const buyers = JSON.parse(buyersJson);
-  const cards = document.querySelectorAll('.buyer-card');
+  const grid = document.getElementById('grid');
+  const cards = () => [...document.querySelectorAll('.buyer-card')];
   const emptyFilter = document.getElementById('empty-filter');
   const countEl = document.getElementById('count');
 
+  // ── Filters ──────────────────────────────────────────────────────────
   function applyFilters() {
     const search = document.getElementById('search').value.toLowerCase();
     const geo = document.getElementById('filter-geo').value.toLowerCase();
     const traffic = document.getElementById('filter-traffic').value.toLowerCase();
     const ratingMin = Number(document.getElementById('filter-rating').value) || 0;
     const typeFilter = document.getElementById('filter-type').value;
-    const workedOnly = document.getElementById('filter-worked').checked;
 
     let visible = 0;
-    cards.forEach(card => {
-      const name = card.dataset.name ?? '';
-      const cardGeo = card.dataset.geo ?? '';
-      const cardTraffic = card.dataset.traffic ?? '';
-      const cardRating = Number(card.dataset.rating) || 0;
-      const cardType = card.dataset.type ?? '';
-      const cardWorked = card.dataset.worked === '1';
-
+    cards().forEach(card => {
       const ok =
-        (!search || name.includes(search)) &&
-        (!geo || cardGeo.includes(geo)) &&
-        (!traffic || cardTraffic.includes(traffic)) &&
-        (!ratingMin || cardRating >= ratingMin) &&
-        (!typeFilter || cardType === typeFilter) &&
-        (!workedOnly || cardWorked);
-
+        (!search || (card.dataset.name ?? '').includes(search)) &&
+        (!geo || (card.dataset.geo ?? '').includes(geo)) &&
+        (!traffic || (card.dataset.traffic ?? '').includes(traffic)) &&
+        (!ratingMin || Number(card.dataset.rating) >= ratingMin) &&
+        (!typeFilter || card.dataset.type === typeFilter);
       card.style.display = ok ? '' : 'none';
       if (ok) visible++;
     });
-
-    countEl.textContent = `${visible} of ${cards.length}`;
+    countEl.textContent = `${visible} of ${cards().length}`;
     emptyFilter.classList.toggle('hidden', visible > 0);
   }
 
-  ['search', 'filter-geo', 'filter-traffic', 'filter-rating', 'filter-type', 'filter-worked'].forEach(id => {
+  ['search', 'filter-geo', 'filter-traffic', 'filter-rating', 'filter-type'].forEach(id => {
     document.getElementById(id)?.addEventListener('input', applyFilters);
     document.getElementById(id)?.addEventListener('change', applyFilters);
   });
-
   applyFilters();
 
-  // CSV export
+  // ── Worked-with toggle ────────────────────────────────────────────────
+  document.querySelectorAll('.worked-btn').forEach(btn => {
+    btn.addEventListener('click', async (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      const id = btn.dataset.id;
+      const newWorked = btn.dataset.worked !== '1';
+      btn.dataset.worked = newWorked ? '1' : '0';
+      // Update appearance immediately
+      if (newWorked) {
+        btn.className = btn.className
+          .replace('bg-card-2 text-gray-600 border-border hover:text-gray-400 hover:border-gray-500', '')
+          + ' bg-success/15 text-success border-success/30 hover:bg-success/25';
+        btn.textContent = '✓ Worked';
+        btn.title = 'Mark as not worked with';
+      } else {
+        btn.className = btn.className
+          .replace('bg-success/15 text-success border-success/30 hover:bg-success/25', '')
+          + ' bg-card-2 text-gray-600 border-border hover:text-gray-400 hover:border-gray-500';
+        btn.textContent = '○ Not worked';
+        btn.title = 'Mark as worked with';
+      }
+      await fetch('/api/toggle-worked', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id, worked_with: newWorked }),
+      });
+    });
+  });
+
+  // ── Drag and drop ─────────────────────────────────────────────────────
+  let dragSrc = null;
+
+  if (grid) {
+    grid.addEventListener('dragstart', e => {
+      const card = e.target.closest('.buyer-card');
+      if (!card) return;
+      dragSrc = card;
+      card.style.opacity = '0.4';
+      e.dataTransfer.effectAllowed = 'move';
+    });
+
+    grid.addEventListener('dragend', e => {
+      const card = e.target.closest('.buyer-card');
+      if (card) card.style.opacity = '';
+      dragSrc = null;
+      document.querySelectorAll('.buyer-card').forEach(c => c.classList.remove('ring-2', 'ring-accent'));
+    });
+
+    grid.addEventListener('dragover', e => {
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'move';
+      const card = e.target.closest('.buyer-card');
+      document.querySelectorAll('.buyer-card').forEach(c => c.classList.remove('ring-2', 'ring-accent'));
+      if (card && card !== dragSrc) card.classList.add('ring-2', 'ring-accent');
+    });
+
+    grid.addEventListener('drop', e => {
+      e.preventDefault();
+      const target = e.target.closest('.buyer-card');
+      if (!target || target === dragSrc || !dragSrc) return;
+      document.querySelectorAll('.buyer-card').forEach(c => c.classList.remove('ring-2', 'ring-accent'));
+
+      // Determine insert position: before or after target
+      const rect = target.getBoundingClientRect();
+      const mid = rect.left + rect.width / 2;
+      if (e.clientX < mid) {
+        grid.insertBefore(dragSrc, target);
+      } else {
+        grid.insertBefore(dragSrc, target.nextSibling);
+      }
+      saveOrder();
+    });
+  }
+
+  function saveOrder() {
+    const ids = cards().map(c => c.dataset.id).filter(Boolean);
+    fetch('/api/reorder', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ table: 'buyers', ids }),
+    });
+  }
+
+  // ── CSV export ────────────────────────────────────────────────────────
   document.getElementById('export-csv')?.addEventListener('click', () => {
     const headers = ['Name','Type','Worked With','Contact','Email','Telegram','GEOs','Traffic Types','Budget','Rating','Notes'];
     const rows = buyers.map(b => [
-      b.name,
-      b.type ?? 'EXTERNAL',
-      b.worked_with ? 'Yes' : 'No',
-      b.contact_name ?? '',
-      b.contact_email ?? '',
-      b.contact_telegram ?? '',
-      (b.geo_expertise ?? []).join(';'),
-      (b.traffic_types ?? []).join(';'),
-      b.monthly_budget_capacity ?? '',
-      b.rating ?? '',
+      b.name, b.type ?? 'EXTERNAL', b.worked_with ? 'Yes' : 'No',
+      b.contact_name ?? '', b.contact_email ?? '', b.contact_telegram ?? '',
+      (b.geo_expertise ?? []).join(';'), (b.traffic_types ?? []).join(';'),
+      b.monthly_budget_capacity ?? '', b.rating ?? '',
       (b.notes ?? '').replace(/\n/g, ' '),
     ]);
     const csv = [headers, ...rows].map(r => r.map(v => `"${String(v).replace(/"/g, '""')}"`).join(',')).join('\n');
-    const blob = new Blob([csv], { type: 'text/csv' });
     const a = document.createElement('a');
-    a.href = URL.createObjectURL(blob);
+    a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv' }));
     a.download = 'buyers.csv';
     a.click();
   });

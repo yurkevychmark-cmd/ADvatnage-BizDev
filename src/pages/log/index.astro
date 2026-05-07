@@ -1,0 +1,92 @@
+---
+import Layout from '../../components/Layout.astro';
+import { supabase } from '../../lib/supabase';
+
+const { data: entries, error } = await supabase
+  .from('activity_log')
+  .select('*')
+  .order('created_at', { ascending: false })
+  .limit(200);
+
+function timeAgo(dateStr: string): string {
+  const diff = Date.now() - new Date(dateStr).getTime();
+  const m = Math.floor(diff / 60000);
+  if (m < 1) return 'just now';
+  if (m < 60) return `${m}m ago`;
+  const h = Math.floor(m / 60);
+  if (h < 24) return `${h}h ago`;
+  const d = Math.floor(h / 24);
+  if (d < 7) return `${d}d ago`;
+  return new Date(dateStr).toLocaleDateString();
+}
+
+const actionColor: Record<string, string> = {
+  created: 'text-success bg-success/10 border-success/20',
+  updated: 'text-warning bg-warning/10 border-warning/20',
+  deleted: 'text-danger bg-danger/10 border-danger/20',
+};
+
+const entityIcon: Record<string, string> = {
+  buyer: '⊕',
+  operator: '⊛',
+};
+---
+
+<Layout title="Journal">
+  <div class="mb-8">
+    <h1 class="text-2xl font-bold">Journal</h1>
+    <p class="text-gray-500 text-sm mt-1">Activity log — all additions tracked here</p>
+  </div>
+
+  {error && (
+    <div class="mb-4 bg-danger/10 border border-danger/30 text-danger text-sm rounded-lg px-4 py-3 max-w-2xl">
+      DB Error: {error.message}
+      <p class="text-xs mt-1 text-danger/70">Make sure to run the SQL migration to create the activity_log table.</p>
+    </div>
+  )}
+
+  {(!entries || entries.length === 0) ? (
+    <div class="bg-card rounded-xl border border-border p-16 text-center">
+      <p class="text-gray-400 text-lg mb-2">No activity yet</p>
+      <p class="text-gray-600 text-sm">Entries will appear here when buyers or operators are added.</p>
+      {error && (
+        <div class="mt-6 text-left max-w-xl mx-auto">
+          <p class="text-xs text-gray-500 mb-2">Run this SQL in your Supabase Dashboard to create the table:</p>
+          <pre class="bg-card-2 border border-border rounded-lg p-4 text-xs text-gray-300 overflow-x-auto">CREATE TABLE IF NOT EXISTS activity_log (
+  id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
+  entity_type text NOT NULL,
+  entity_name text NOT NULL,
+  action text NOT NULL DEFAULT 'created',
+  created_at timestamptz DEFAULT now()
+);</pre>
+        </div>
+      )}
+    </div>
+  ) : (
+    <div class="bg-card rounded-xl border border-border overflow-hidden max-w-3xl">
+      <div class="grid grid-cols-[auto_1fr_auto_auto] gap-4 px-6 py-3 border-b border-border bg-card-2 text-xs text-gray-500 uppercase tracking-wide font-medium">
+        <div>Type</div>
+        <div>Name</div>
+        <div>Action</div>
+        <div>When</div>
+      </div>
+      {(entries as any[]).map(entry => (
+        <div class="grid grid-cols-[auto_1fr_auto_auto] gap-4 px-6 py-3.5 border-b border-border last:border-0 items-center hover:bg-card-2/40 transition-colors">
+          <div class="flex items-center gap-2">
+            <span class="text-sm text-gray-500">{entityIcon[entry.entity_type] ?? '·'}</span>
+            <span class="text-xs text-gray-500 capitalize">{entry.entity_type}</span>
+          </div>
+          <div class="font-medium text-sm truncate">{entry.entity_name}</div>
+          <div>
+            <span class={`text-xs px-2 py-0.5 rounded border font-medium capitalize ${actionColor[entry.action] ?? 'text-gray-400 bg-gray-700/20 border-gray-600'}`}>
+              {entry.action}
+            </span>
+          </div>
+          <div class="text-xs text-gray-500 font-mono whitespace-nowrap" title={new Date(entry.created_at).toLocaleString()}>
+            {timeAgo(entry.created_at)}
+          </div>
+        </div>
+      ))}
+    </div>
+  )}
+</Layout>
