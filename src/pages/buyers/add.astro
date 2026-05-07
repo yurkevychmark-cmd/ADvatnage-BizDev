@@ -4,6 +4,8 @@ import Layout from '../../components/Layout.astro';
 const trafficOptions = ['Meta Ads', 'InApp', 'DSP', 'Google Ads', 'TikTok Ads'];
 const coopOptions = ['% Spend', '% Spend + Rate', 'CPA', '% Profit'];
 
+let dbError: string | null = null;
+
 if (Astro.request.method === 'POST') {
   const { supabase } = await import('../../lib/supabase');
   const form = await Astro.request.formData();
@@ -26,6 +28,7 @@ if (Astro.request.method === 'POST') {
     notes: (form.get('notes') as string) || null,
   });
   if (!error) return Astro.redirect('/buyers');
+  dbError = error.message;
 }
 
 const inputCls = "w-full bg-card-2 border border-border rounded-lg px-4 py-2 text-gray-100 focus:border-accent focus:ring-1 focus:ring-accent outline-none placeholder-gray-600 transition-colors";
@@ -36,6 +39,12 @@ const inputCls = "w-full bg-card-2 border border-border rounded-lg px-4 py-2 tex
     <a href="/buyers" class="text-gray-600 hover:text-gray-300 text-sm transition-colors">&larr; Back to Buyers</a>
     <h1 class="text-2xl font-bold mt-2">Add Buyer</h1>
   </div>
+
+  {dbError && (
+    <div class="mb-4 bg-danger/10 border border-danger/30 text-danger text-sm rounded-lg px-4 py-3 max-w-2xl">
+      DB Error: {dbError}
+    </div>
+  )}
 
   <form method="POST" class="bg-card rounded-xl border border-border p-6 max-w-2xl space-y-5">
 
