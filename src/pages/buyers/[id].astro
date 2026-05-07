@@ -26,7 +26,7 @@ if (Astro.request.method === 'POST') {
     geo_expertise: geo,
     traffic_types: traffic,
     monthly_budget_capacity: Number(form.get('monthly_budget_capacity')) || 0,
-    cooperation_model: (form.get('cooperation_model') as string) || null,
+    compensation_model: (form.get('cooperation_model') as string) || null,
     cooperation_model_value: Number(form.get('cooperation_model_value')) || null,
     rating: ratingRaw ? Number(ratingRaw) : null,
     notes: (form.get('notes') as string) || null,
@@ -111,12 +111,12 @@ const inputCls = "w-full bg-card-2 border border-border rounded-lg px-4 py-2 tex
         <label class="block text-sm text-gray-400 mb-1">Cooperation Model</label>
         <select name="cooperation_model" id="coop_model" class={inputCls}>
           <option value="">— Select —</option>
-          {coopOptions.map(o => <option value={o} selected={b.cooperation_model === o}>{o}</option>)}
+          {coopOptions.map(o => <option value={o} selected={b.compensation_model === o}>{o}</option>)}
         </select>
       </div>
-      <div id="coop-value-group" class={!b.cooperation_model ? 'hidden' : ''}>
+      <div id="coop-value-group" class={!b.compensation_model ? 'hidden' : ''}>
         <label class="block text-sm text-gray-400 mb-1" id="coop-value-label">
-          {b.cooperation_model === 'CPA' ? 'CPA виплата ($)' : 'Значення (%)'}
+          {b.compensation_model === 'CPA' ? 'CPA виплата ($)' : 'Значення (%)'}
         </label>
         <input type="number" name="cooperation_model_value" id="coop_model_value" step="0.01" min="0"
           value={b.cooperation_model_value ?? ''} placeholder="5" class={inputCls} />

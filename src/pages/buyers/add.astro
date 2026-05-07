@@ -22,7 +22,7 @@ if (Astro.request.method === 'POST') {
     geo_expertise: geo,
     traffic_types: traffic,
     monthly_budget_capacity: Number(form.get('monthly_budget_capacity')) || 0,
-    cooperation_model: (form.get('cooperation_model') as string) || null,
+    compensation_model: (form.get('cooperation_model') as string) || null,
     cooperation_model_value: Number(form.get('cooperation_model_value')) || null,
     rating: ratingRaw ? Number(ratingRaw) : null,
     notes: (form.get('notes') as string) || null,
