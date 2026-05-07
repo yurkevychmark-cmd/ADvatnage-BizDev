@@ -319,6 +319,12 @@ const dealTypeLabel: Record<string, string> = { CPA: 'CPA', RevShare: 'RevShare'
 
             <!-- Expandable: update actuals + delete -->
             <div id={`expand-${deal.id}`} class="hidden border-t border-border p-5">
+              <!-- Delete form lives outside the actuals form to avoid nesting -->
+              <form method="POST" id={`delete-form-${deal.id}`}>
+                <input type="hidden" name="_action" value="delete" />
+                <input type="hidden" name="deal_id" value={deal.id} />
+              </form>
+
               <form method="POST" class="grid grid-cols-2 gap-4">
                 <input type="hidden" name="_action" value="update_actuals" />
                 <input type="hidden" name="deal_id" value={deal.id} />
@@ -362,14 +368,13 @@ const dealTypeLabel: Record<string, string> = { CPA: 'CPA', RevShare: 'RevShare'
                   <button type="submit" class="bg-accent hover:bg-accent-dark text-white text-sm font-medium px-4 py-1.5 rounded-lg transition-colors">
                     Save
                   </button>
-                  <form method="POST" style="display:inline">
-                    <input type="hidden" name="_action" value="delete" />
-                    <input type="hidden" name="deal_id" value={deal.id} />
-                    <button type="submit" onclick="return confirm('Delete this deal?')"
-                      class="text-danger hover:bg-danger/10 text-sm px-3 py-1.5 rounded-lg border border-danger/20 transition-colors">
-                      Delete Deal
-                    </button>
-                  </form>
+                  <button
+                    type="submit"
+                    form={`delete-form-${deal.id}`}
+                    onclick="return confirm('Delete this deal?')"
+                    class="text-danger hover:bg-danger/10 text-sm px-3 py-1.5 rounded-lg border border-danger/20 transition-colors">
+                    Delete Deal
+                  </button>
                 </div>
               </form>
             </div>
