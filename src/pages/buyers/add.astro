@@ -26,6 +26,7 @@ if (Astro.request.method === 'POST') {
     cooperation_model_value: Number(form.get('cooperation_model_value')) || null,
     rating: ratingRaw ? Number(ratingRaw) : null,
     notes: (form.get('notes') as string) || null,
+    worked_with: form.get('worked_with') === 'on',
   });
   if (!error) return Astro.redirect('/buyers');
   dbError = error.message;
@@ -138,6 +139,12 @@ const inputCls = "w-full bg-card-2 border border-border rounded-lg px-4 py-2 tex
       <label class="block text-sm text-gray-400 mb-1">Notes</label>
       <textarea name="notes" rows="3" class={`${inputCls} resize-none`}></textarea>
     </div>
+
+    <!-- Worked with -->
+    <label class="flex items-center gap-3 cursor-pointer group">
+      <input type="checkbox" name="worked_with" class="w-4 h-4 rounded accent-accent" />
+      <span class="text-sm text-gray-300 group-hover:text-gray-100 transition-colors">We have worked with this buyer before</span>
+    </label>
 
     <button type="submit" class="bg-accent hover:bg-accent-dark text-white font-medium px-6 py-2.5 rounded-lg transition-colors shadow-lg shadow-accent/20">
       Create Buyer
