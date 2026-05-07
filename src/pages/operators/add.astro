@@ -19,7 +19,7 @@ if (Astro.request.method === 'POST') {
     name: form.get('name') as string,
     brand_name: (form.get('brand') as string) || null,
     contact: (form.get('contact') as string) || null,
-    payment_method: (form.get('payment_method') as string) || null,
+    payment_model: (form.get('payment_method') as string) || null,
     target_geos: geo,
     budget_min: Number(form.get('budget_min')) || 0,
     budget_max: Number(form.get('budget_max')) || 0,
