@@ -11,6 +11,8 @@ if (Astro.request.method === 'POST') {
   const traffic = trafficOptions.filter(t => form.get(`traffic_${t}`));
   const ratingRaw = form.get('rating') as string;
   const dealType = form.get('deal_type') as string;
+  const linksRaw = form.getAll('links[]') as string[];
+  const links = linksRaw.map(l => l.trim()).filter(Boolean);
   const { error } = await supabase.from('operators').insert({
     name: form.get('name') as string,
     brand: (form.get('brand') as string) || null,
@@ -26,6 +28,7 @@ if (Astro.request.method === 'POST') {
     spend_pct: Number(form.get('spend_pct')) || null,
     rating: ratingRaw ? Number(ratingRaw) : null,
     notes: (form.get('notes') as string) || null,
+    links: links.length > 0 ? links : null,
   });
   if (!error) return Astro.redirect('/operators');
 }
@@ -140,6 +143,18 @@ const inputCls = "w-full bg-card-2 border border-border rounded-lg px-4 py-2 tex
       </div>
     </div>
 
+    <!-- Links -->
+    <div>
+      <label class="block text-sm text-gray-400 mb-2">Links <span class="text-gray-600">(сайт, афіліат-кабінет)</span></label>
+      <div id="links-container" class="space-y-2">
+        <div class="flex gap-2 link-row">
+          <input type="url" name="links[]" placeholder="https://..." class={`${inputCls} flex-1`} />
+          <button type="button" onclick="this.closest('.link-row').remove()" class="text-gray-600 hover:text-danger px-2 text-lg leading-none transition-colors">×</button>
+        </div>
+      </div>
+      <button type="button" id="add-link" class="mt-2 text-xs text-accent hover:text-accent/80 transition-colors">+ Додати посилання</button>
+    </div>
+
     <!-- Notes -->
     <div>
       <label class="block text-sm text-gray-400 mb-1">Notes</label>
@@ -167,6 +182,15 @@ const inputCls = "w-full bg-card-2 border border-border rounded-lg px-4 py-2 tex
   }
   dealType.addEventListener('change', updateDealFields);
   updateDealFields();
+
+  // Dynamic links
+  document.getElementById('add-link')?.addEventListener('click', () => {
+    const container = document.getElementById('links-container')!;
+    const row = document.createElement('div');
+    row.className = 'flex gap-2 link-row';
+    row.innerHTML = `<input type="url" name="links[]" placeholder="https://..." class="flex-1 bg-card-2 border border-border rounded-lg px-4 py-2 text-gray-100 focus:border-accent focus:ring-1 focus:ring-accent outline-none placeholder-gray-600 transition-colors" /><button type="button" onclick="this.closest('.link-row').remove()" class="text-gray-600 hover:text-danger px-2 text-lg leading-none transition-colors">×</button>`;
+    container.appendChild(row);
+  });
 
   // Rating dots
   const input = document.getElementById('rating_input') as HTMLInputElement;

@@ -55,8 +55,9 @@ const dealTypeBadge: Record<string, string> = {
   ) : (
     <div class="bg-card rounded-xl border border-border overflow-hidden">
       <!-- Table header -->
-      <div class="grid grid-cols-[2fr_1.5fr_1fr_1fr_1.5fr_1fr_auto] gap-4 px-5 py-3 border-b border-border bg-card-2 text-xs text-gray-500 uppercase tracking-wide font-medium">
+      <div class="grid grid-cols-[2fr_1.5fr_1.5fr_1fr_1fr_1.5fr_1fr_auto] gap-4 px-5 py-3 border-b border-border bg-card-2 text-xs text-gray-500 uppercase tracking-wide font-medium">
         <div>Name / Brand</div>
+        <div>Contact</div>
         <div>GEOs</div>
         <div>Deal Type</div>
         <div>Terms</div>
@@ -80,7 +81,7 @@ const dealTypeBadge: Record<string, string> = {
 
           return (
             <div
-              class="op-row grid grid-cols-[2fr_1.5fr_1fr_1fr_1.5fr_1fr_auto] gap-4 px-5 py-4 border-b border-border last:border-0 hover:bg-card-2/50 transition-colors items-center cursor-pointer"
+              class="op-row grid grid-cols-[2fr_1.5fr_1.5fr_1fr_1fr_1.5fr_1fr_auto] gap-4 px-5 py-4 border-b border-border last:border-0 hover:bg-card-2/50 transition-colors items-center cursor-pointer"
               data-name={`${op.name ?? ''} ${op.brand ?? ''}`.toLowerCase()}
               data-deal={(dtype).toLowerCase()}
               data-geo={(geos).join(' ').toLowerCase()}
@@ -91,6 +92,15 @@ const dealTypeBadge: Record<string, string> = {
                 <p class="font-medium text-sm truncate">{op.name ?? op.brand_name ?? '—'}</p>
                 {op.brand && op.brand !== op.name && (
                   <p class="text-xs text-gray-600 truncate">{op.brand}</p>
+                )}
+              </div>
+
+              <!-- Contact -->
+              <div class="min-w-0">
+                {op.contact ? (
+                  <span class="text-xs text-accent font-mono truncate block">{op.contact}</span>
+                ) : (
+                  <span class="text-xs text-gray-700 italic">—</span>
                 )}
               </div>
 
