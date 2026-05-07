@@ -16,6 +16,11 @@ const dealTypeBadge: Record<string, string> = {
   Spend:    'bg-warning/15 text-warning border-warning/25',
   Hybrid:   'bg-blue-500/15 text-blue-400 border-blue-500/25',
 };
+
+function getDomain(url: string): string {
+  try { return new URL(url).hostname.replace('www.', ''); }
+  catch { return url; }
+}
 ---
 
 <Layout title="Operators">
@@ -34,16 +39,24 @@ const dealTypeBadge: Record<string, string> = {
     </div>
   </div>
 
-  <!-- Search bar -->
-  <div class="flex gap-3 mb-4">
+  <!-- Filters -->
+  <div class="flex gap-3 mb-4 flex-wrap">
     <input id="search" type="text" placeholder="Search by name, brand or GEO…"
-      class="flex-1 bg-card border border-border rounded-lg px-4 py-2 text-sm text-gray-200 placeholder-gray-600 focus:border-accent outline-none" />
+      class="flex-1 min-w-48 bg-card border border-border rounded-lg px-4 py-2 text-sm text-gray-200 placeholder-gray-600 focus:border-accent outline-none" />
     <select id="filter-deal" class="bg-card border border-border rounded-lg px-4 py-2 text-sm text-gray-300 focus:border-accent outline-none">
       <option value="">All deal types</option>
       <option>CPA</option>
       <option>RevShare</option>
       <option>Spend</option>
       <option>Hybrid</option>
+    </select>
+    <select id="filter-traffic" class="bg-card border border-border rounded-lg px-4 py-2 text-sm text-gray-300 focus:border-accent outline-none">
+      <option value="">All traffic</option>
+      <option>Meta Ads</option>
+      <option>InApp</option>
+      <option>DSP</option>
+      <option>Google Ads</option>
+      <option>TikTok Ads</option>
     </select>
     <span id="count" class="self-center text-xs text-gray-600 font-mono"></span>
   </div>
@@ -54,49 +67,54 @@ const dealTypeBadge: Record<string, string> = {
       <a href="/operators/add" class="text-accent hover:underline text-sm mt-2 inline-block">Add your first operator</a>
     </div>
   ) : (
-    <div class="bg-card rounded-xl border border-border overflow-hidden">
-      <!-- Table header -->
-      <div class="grid grid-cols-[1.5rem_2fr_1.5fr_1.5fr_1fr_1fr_1.5fr_1fr_auto] gap-4 px-5 py-3 border-b border-border bg-card-2 text-xs text-gray-500 uppercase tracking-wide font-medium">
+    <div class="bg-card rounded-xl border border-border overflow-hidden" id="op-table">
+
+      <!-- Header -->
+      <div class="grid grid-cols-[1.5rem_2fr_1.2fr_1fr_1fr_1fr_auto] gap-4 px-5 py-3 border-b border-border bg-card-2 text-xs text-gray-500 uppercase tracking-wide font-medium">
         <div></div>
         <div>Name / Brand</div>
         <div>Contact</div>
-        <div>GEOs</div>
-        <div>Deal Type</div>
+        <div>Deal</div>
         <div>Terms</div>
-        <div>Budget / mo</div>
         <div>Rating</div>
         <div></div>
       </div>
 
-      <!-- Table rows -->
-      <div id="op-table">
-        {(operators as any[]).map(op => {
-          const geos = (op.target_geos ?? []);
-          const dtype = op.deal_type ?? 'CPA';
-          const terms = dtype === 'CPA'
-            ? (op.cpa_value ? `$${op.cpa_value}/conv` : '—')
-            : dtype === 'Spend'
-              ? (op.spend_pct ? `${op.spend_pct}%` : '—')
-              : dtype === 'Hybrid'
-                ? [op.cpa_value ? `$${op.cpa_value}` : null, op.revshare_pct ? `${op.revshare_pct}%` : null].filter(Boolean).join(' + ') || '—'
-                : (op.revshare_pct ? `${op.revshare_pct}%` : '—');
+      <!-- Rows -->
+      {(operators as any[]).map(op => {
+        const geos: string[] = op.target_geos ?? [];
+        const traffic: string[] = op.preferred_traffic ?? [];
+        const links: string[] = op.links ?? [];
+        const dtype = op.deal_type ?? 'CPA';
+        const terms = dtype === 'CPA'
+          ? (op.cpa_value ? `$${op.cpa_value}/conv` : '—')
+          : dtype === 'Spend'
+            ? (op.spend_pct ? `${op.spend_pct}%` : '—')
+            : dtype === 'Hybrid'
+              ? [op.cpa_value ? `$${op.cpa_value}` : null, op.revshare_pct ? `${op.revshare_pct}%` : null].filter(Boolean).join('+') || '—'
+              : (op.revshare_pct ? `${op.revshare_pct}%` : '—');
+        const notes: string = op.notes ?? '';
+        const hasDetails = traffic.length > 0 || geos.length > 0 || links.length > 0 || notes || op.budget_min != null;
 
-          return (
-            <div
-              class="op-row grid grid-cols-[1.5rem_2fr_1.5fr_1.5fr_1fr_1fr_1.5fr_1fr_auto] gap-4 px-5 py-4 border-b border-border last:border-0 hover:bg-card-2/50 transition-colors items-center cursor-pointer"
-              draggable="true"
-              data-id={op.id}
-              data-name={`${op.name ?? ''} ${op.brand_name ?? ''}`.toLowerCase()}
-              data-deal={dtype.toLowerCase()}
-              data-geo={geos.join(' ').toLowerCase()}
-              onclick={`window.location='/operators/${op.id}'`}
-            >
+        return (
+          <div
+            class="op-row border-b border-border last:border-0"
+            draggable="true"
+            data-id={op.id}
+            data-name={`${op.name ?? ''} ${op.brand_name ?? ''}`.toLowerCase()}
+            data-deal={dtype.toLowerCase()}
+            data-traffic={traffic.join(' ').toLowerCase()}
+            data-geo={geos.join(' ').toLowerCase()}
+          >
+            <!-- Main row -->
+            <div class="grid grid-cols-[1.5rem_2fr_1.2fr_1fr_1fr_1fr_auto] gap-4 px-5 py-3.5 hover:bg-card-2/40 transition-colors items-center">
+
               <!-- Drag handle -->
-              <div class="drag-handle text-gray-700 hover:text-gray-400 cursor-grab active:cursor-grabbing select-none text-base leading-none" title="Drag to reorder" onclick="event.stopPropagation()">⠿</div>
+              <div class="drag-handle text-gray-700 hover:text-gray-400 cursor-grab active:cursor-grabbing select-none text-base leading-none" title="Drag to reorder">⠿</div>
 
-              <!-- Name / Brand -->
+              <!-- Name -->
               <div class="min-w-0">
-                <p class="font-medium text-sm truncate">{op.name ?? '—'}</p>
+                <a href={`/operators/${op.id}`} class="font-medium text-sm hover:text-accent transition-colors truncate block">{op.name ?? '—'}</a>
                 {op.brand_name && op.brand_name !== op.name && (
                   <p class="text-xs text-gray-600 truncate">{op.brand_name}</p>
                 )}
@@ -107,20 +125,11 @@ const dealTypeBadge: Record<string, string> = {
                 {op.contact ? (
                   <span class="text-xs text-accent font-mono truncate block">{op.contact}</span>
                 ) : (
-                  <span class="text-xs text-gray-700 italic">—</span>
+                  <span class="text-xs text-gray-700">—</span>
                 )}
               </div>
 
-              <!-- GEOs -->
-              <div class="flex flex-wrap gap-1">
-                {geos.slice(0, 4).map((g: string) => (
-                  <span class="text-xs bg-card-2 border border-border px-1.5 py-0.5 rounded text-gray-400 font-mono">{g}</span>
-                ))}
-                {geos.length > 4 && <span class="text-xs text-gray-600">+{geos.length - 4}</span>}
-                {geos.length === 0 && <span class="text-xs text-gray-700 italic">—</span>}
-              </div>
-
-              <!-- Deal Type -->
+              <!-- Deal type -->
               <div>
                 <span class={`text-xs px-2 py-0.5 rounded border font-medium ${dealTypeBadge[dtype] ?? 'bg-gray-700/40 text-gray-400 border-gray-600'}`}>
                   {dtype}
@@ -130,13 +139,6 @@ const dealTypeBadge: Record<string, string> = {
               <!-- Terms -->
               <div class="font-mono text-sm text-gray-300">{terms}</div>
 
-              <!-- Budget -->
-              <div class="text-sm text-gray-400 font-mono">
-                {op.budget_min != null
-                  ? `$${Number(op.budget_min).toLocaleString()} — $${Number(op.budget_max).toLocaleString()}`
-                  : '—'}
-              </div>
-
               <!-- Rating -->
               <div>
                 {op.rating != null ? (
@@ -145,17 +147,100 @@ const dealTypeBadge: Record<string, string> = {
                     op.rating >= 5 ? 'bg-warning/15 text-warning border-warning/25' :
                     'bg-danger/15 text-danger border-danger/25'
                   }`}>{op.rating}/10</span>
-                ) : (
-                  <span class="text-gray-700 text-xs">—</span>
+                ) : <span class="text-gray-700 text-xs">—</span>}
+              </div>
+
+              <!-- Expand toggle -->
+              <button
+                class="expand-btn text-gray-600 hover:text-gray-300 text-base transition-colors px-1 select-none"
+                data-id={op.id}
+                title="Show details"
+              >⌄</button>
+            </div>
+
+            <!-- Expanded detail panel -->
+            <div id={`op-expand-${op.id}`} class="hidden border-t border-border/50 bg-card-2/30 px-5 py-4">
+              <div class="grid grid-cols-[1fr_1fr_1fr] gap-x-8 gap-y-4">
+
+                <!-- Traffic types -->
+                <div>
+                  <p class="text-xs text-gray-600 uppercase tracking-wide mb-2">Traffic Sources</p>
+                  {traffic.length > 0 ? (
+                    <div class="flex flex-wrap gap-1.5">
+                      {traffic.map(t => (
+                        <span class="text-xs bg-card border border-border px-2 py-0.5 rounded-full text-gray-300">{t}</span>
+                      ))}
+                    </div>
+                  ) : <span class="text-xs text-gray-700">—</span>}
+                </div>
+
+                <!-- GEOs -->
+                <div>
+                  <p class="text-xs text-gray-600 uppercase tracking-wide mb-2">GEOs</p>
+                  {geos.length > 0 ? (
+                    <div class="flex flex-wrap gap-1">
+                      {geos.map(g => (
+                        <span class="text-xs bg-card border border-border px-1.5 py-0.5 rounded text-gray-400 font-mono">{g}</span>
+                      ))}
+                    </div>
+                  ) : <span class="text-xs text-gray-700">—</span>}
+                </div>
+
+                <!-- Budget -->
+                <div>
+                  <p class="text-xs text-gray-600 uppercase tracking-wide mb-2">Budget / mo</p>
+                  <span class="text-sm text-gray-300 font-mono">
+                    {op.budget_min != null
+                      ? `$${Number(op.budget_min).toLocaleString()} — $${Number(op.budget_max).toLocaleString()}`
+                      : '—'}
+                  </span>
+                </div>
+
+                <!-- Links -->
+                {links.length > 0 && (
+                  <div>
+                    <p class="text-xs text-gray-600 uppercase tracking-wide mb-2">Links</p>
+                    <div class="flex flex-wrap gap-2">
+                      {links.map(link => (
+                        <a
+                          href={link}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          onclick="event.stopPropagation()"
+                          class="inline-flex items-center gap-1 text-xs bg-card border border-border hover:border-accent/40 text-accent hover:text-accent/80 px-2 py-1 rounded-lg transition-colors"
+                        >
+                          <span>↗</span>
+                          <span class="max-w-[120px] truncate">{getDomain(link)}</span>
+                        </a>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                <!-- Notes -->
+                {notes && (
+                  <div class={links.length > 0 ? 'col-span-2' : 'col-span-3'}>
+                    <p class="text-xs text-gray-600 uppercase tracking-wide mb-2">Notes</p>
+                    <p class="text-sm text-gray-400 leading-relaxed notes-text" data-full={notes}>
+                      {notes.length > 120 ? notes.slice(0, 120) + '…' : notes}
+                    </p>
+                    {notes.length > 120 && (
+                      <button class="notes-toggle text-xs text-accent hover:text-accent/80 mt-1 transition-colors">Show more</button>
+                    )}
+                  </div>
                 )}
               </div>
 
-              <!-- Arrow -->
-              <div class="text-gray-600 text-sm">›</div>
+              <!-- Edit link -->
+              <div class="mt-4 pt-3 border-t border-border/30">
+                <a href={`/operators/${op.id}`} class="text-xs text-gray-500 hover:text-accent transition-colors">
+                  ✎ Edit operator
+                </a>
+              </div>
             </div>
-          );
-        })}
-      </div>
+          </div>
+        );
+      })}
     </div>
   )}
 
@@ -166,7 +251,7 @@ const dealTypeBadge: Record<string, string> = {
 
 <script define:vars={{ operatorsJson }}>
   const operators = JSON.parse(operatorsJson);
-  const table = document.getElementById('op-table');
+  const opTable = document.getElementById('op-table');
   const rows = () => [...document.querySelectorAll('.op-row')];
   const countEl = document.getElementById('count');
   const emptyFilter = document.getElementById('empty-filter');
@@ -175,13 +260,17 @@ const dealTypeBadge: Record<string, string> = {
   function applyFilters() {
     const search = document.getElementById('search').value.toLowerCase();
     const deal = document.getElementById('filter-deal').value.toLowerCase();
+    const traffic = document.getElementById('filter-traffic').value.toLowerCase();
     let visible = 0;
     rows().forEach(row => {
       const name = row.dataset.name ?? '';
       const geo = row.dataset.geo ?? '';
       const rowDeal = row.dataset.deal ?? '';
-      const ok = (!search || name.includes(search) || geo.includes(search)) &&
-                 (!deal || rowDeal === deal);
+      const rowTraffic = row.dataset.traffic ?? '';
+      const ok =
+        (!search || name.includes(search) || geo.includes(search)) &&
+        (!deal || rowDeal === deal) &&
+        (!traffic || rowTraffic.includes(traffic));
       row.style.display = ok ? '' : 'none';
       if (ok) visible++;
     });
@@ -189,16 +278,42 @@ const dealTypeBadge: Record<string, string> = {
     emptyFilter.classList.toggle('hidden', visible > 0);
   }
 
-  ['search', 'filter-deal'].forEach(id =>
-    document.getElementById(id)?.addEventListener('input', applyFilters)
-  );
+  ['search', 'filter-deal', 'filter-traffic'].forEach(id => {
+    document.getElementById(id)?.addEventListener('input', applyFilters);
+    document.getElementById(id)?.addEventListener('change', applyFilters);
+  });
   applyFilters();
+
+  // ── Expand / collapse ─────────────────────────────────────────────────
+  document.querySelectorAll('.expand-btn').forEach(btn => {
+    btn.addEventListener('click', e => {
+      e.stopPropagation();
+      const id = btn.dataset.id;
+      const panel = document.getElementById(`op-expand-${id}`);
+      const open = !panel.classList.contains('hidden');
+      panel.classList.toggle('hidden');
+      btn.textContent = open ? '⌄' : '⌃';
+    });
+  });
+
+  // ── Notes expand ──────────────────────────────────────────────────────
+  document.querySelectorAll('.notes-toggle').forEach(btn => {
+    let expanded = false;
+    const p = btn.previousElementSibling;
+    const full = p.dataset.full;
+    btn.addEventListener('click', e => {
+      e.stopPropagation();
+      expanded = !expanded;
+      p.textContent = expanded ? full : full.slice(0, 120) + '…';
+      btn.textContent = expanded ? 'Show less' : 'Show more';
+    });
+  });
 
   // ── Drag and drop ─────────────────────────────────────────────────────
   let dragSrc = null;
 
-  if (table) {
-    table.addEventListener('dragstart', e => {
+  if (opTable) {
+    opTable.addEventListener('dragstart', e => {
       const row = e.target.closest('.op-row');
       if (!row) return;
       dragSrc = row;
@@ -206,56 +321,45 @@ const dealTypeBadge: Record<string, string> = {
       e.dataTransfer.effectAllowed = 'move';
     });
 
-    table.addEventListener('dragend', e => {
-      const row = e.target.closest('.op-row');
-      if (row) row.style.opacity = '';
+    opTable.addEventListener('dragend', () => {
+      if (dragSrc) dragSrc.style.opacity = '';
       dragSrc = null;
-      rows().forEach(r => r.classList.remove('ring-2', 'ring-inset', 'ring-accent/50', 'bg-accent/5'));
+      rows().forEach(r => r.classList.remove('bg-accent/5'));
     });
 
-    table.addEventListener('dragover', e => {
+    opTable.addEventListener('dragover', e => {
       e.preventDefault();
-      e.dataTransfer.dropEffect = 'move';
       const row = e.target.closest('.op-row');
       rows().forEach(r => r.classList.remove('bg-accent/5'));
       if (row && row !== dragSrc) row.classList.add('bg-accent/5');
     });
 
-    table.addEventListener('drop', e => {
+    opTable.addEventListener('drop', e => {
       e.preventDefault();
       const target = e.target.closest('.op-row');
       if (!target || target === dragSrc || !dragSrc) return;
       rows().forEach(r => r.classList.remove('bg-accent/5'));
-
       const rect = target.getBoundingClientRect();
-      const mid = rect.top + rect.height / 2;
-      if (e.clientY < mid) {
-        table.insertBefore(dragSrc, target);
-      } else {
-        table.insertBefore(dragSrc, target.nextSibling);
-      }
-      saveOrder();
-    });
-  }
-
-  function saveOrder() {
-    const ids = rows().map(r => r.dataset.id).filter(Boolean);
-    fetch('/api/reorder', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ table: 'operators', ids }),
+      opTable.insertBefore(dragSrc, e.clientY < rect.top + rect.height / 2 ? target : target.nextSibling);
+      fetch('/api/reorder', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ table: 'operators', ids: rows().map(r => r.dataset.id).filter(Boolean) }),
+      });
     });
   }
 
   // ── CSV export ────────────────────────────────────────────────────────
   document.getElementById('export-csv')?.addEventListener('click', () => {
-    const headers = ['Name','Brand','GEOs','Deal Type','CPA Value','RevShare %','Spend %','Budget Min','Budget Max','Rating','Notes'];
+    const headers = ['Name','Brand','Contact','GEOs','Traffic','Deal Type','CPA Value','RevShare %','Spend %','Budget Min','Budget Max','Rating','Links','Notes'];
     const csvRows = operators.map(o => [
-      o.name ?? '', o.brand_name ?? '',
-      (o.target_geos ?? []).join(';'), o.deal_type ?? '',
-      o.cpa_value ?? '', o.revshare_pct ?? '', o.spend_pct ?? '',
-      o.budget_min ?? '', o.budget_max ?? '',
-      o.rating ?? '', (o.notes ?? '').replace(/\n/g, ' '),
+      o.name ?? '', o.brand_name ?? '', o.contact ?? '',
+      (o.target_geos ?? []).join(';'),
+      (o.preferred_traffic ?? []).join(';'),
+      o.deal_type ?? '', o.cpa_value ?? '', o.revshare_pct ?? '', o.spend_pct ?? '',
+      o.budget_min ?? '', o.budget_max ?? '', o.rating ?? '',
+      (o.links ?? []).join(';'),
+      (o.notes ?? '').replace(/\n/g, ' '),
     ]);
     const csv = [headers, ...csvRows].map(r => r.map(v => `"${String(v).replace(/"/g, '""')}"`).join(',')).join('\n');
     const a = document.createElement('a');
