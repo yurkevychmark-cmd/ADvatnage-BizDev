@@ -48,6 +48,18 @@ const stagePillColor: Record<string, string> = {
 
 const operatorsJson = JSON.stringify(operators ?? []);
 
+// Open tasks per operator
+const { data: openTasks } = await supabase
+  .from('tasks')
+  .select('entity_id')
+  .eq('entity_type', 'operator')
+  .neq('status', 'done');
+
+const taskCountByOp: Record<string, number> = {};
+(openTasks ?? []).forEach((t: any) => {
+  if (t.entity_id) taskCountByOp[t.entity_id] = (taskCountByOp[t.entity_id] ?? 0) + 1;
+});
+
 const dealTypeBadge: Record<string, string> = {
   CPA:      'bg-success/15 text-success border-success/25',
   RevShare: 'bg-accent/15 text-accent border-accent/25',
@@ -107,8 +119,8 @@ function getDomain(url: string): string {
   ) : (
     <div class="bg-card rounded-xl border border-border overflow-hidden" id="op-table">
 
-      <!-- Header -->
-      <div class="grid grid-cols-[1.5rem_2fr_1.2fr_1.2fr_0.8fr_0.8fr_0.8fr_auto] gap-4 px-5 py-3 border-b border-border bg-card-2 text-xs text-gray-500 uppercase tracking-wide font-medium">
+      <!-- Header (desktop only) -->
+      <div class="hidden md:grid grid-cols-[1.5rem_2fr_1.2fr_1.2fr_0.8fr_0.8fr_0.8fr_auto] gap-4 px-5 py-3 border-b border-border bg-card-2 text-xs text-gray-500 uppercase tracking-wide font-medium">
         <div></div>
         <div>Name / Brand</div>
         <div>Contact</div>
@@ -135,6 +147,7 @@ function getDomain(url: string): string {
               : (op.revshare_pct ? `${op.revshare_pct}%` : '—');
         const notes: string = op.notes ?? '';
         const hasDetails = traffic.length > 0 || geos.length > 0 || links.length > 0 || notes || op.budget_min != null;
+        const openTaskCount = taskCountByOp[op.id] ?? 0;
 
         return (
           <div
@@ -146,11 +159,11 @@ function getDomain(url: string): string {
             data-traffic={traffic.join(' ').toLowerCase()}
             data-geo={geos.join(' ').toLowerCase()}
           >
-            <!-- Main row -->
-            <div class="grid grid-cols-[1.5rem_2fr_1.2fr_1.2fr_0.8fr_0.8fr_0.8fr_auto] gap-4 px-5 py-3.5 hover:bg-card-2/40 transition-colors items-center">
+            <!-- Main row: desktop grid / mobile flex-col card -->
+            <div class="md:grid md:grid-cols-[1.5rem_2fr_1.2fr_1.2fr_0.8fr_0.8fr_0.8fr_auto] flex flex-col gap-2 md:gap-4 px-4 md:px-5 py-3.5 hover:bg-card-2/40 transition-colors md:items-center relative">
 
-              <!-- Drag handle -->
-              <div class="drag-handle text-gray-700 hover:text-gray-400 cursor-grab active:cursor-grabbing select-none text-base leading-none" title="Drag to reorder">⠿</div>
+              <!-- Drag handle (desktop only) -->
+              <div class="drag-handle hidden md:block text-gray-700 hover:text-gray-400 cursor-grab active:cursor-grabbing select-none text-base leading-none" title="Drag to reorder">⠿</div>
 
               <!-- Name + Traffic tags -->
               <div class="min-w-0">
@@ -166,6 +179,14 @@ function getDomain(url: string): string {
                     <span class={`text-xs px-1.5 py-0.5 rounded border font-medium leading-none ${stagePillColor[primaryStage]}`}>
                       {stageLabel[primaryStage]}
                     </span>
+                  )}
+                  {openTaskCount > 0 && (
+                    <a href={`/tasks?status=open`}
+                      class="text-[10px] px-1.5 py-0.5 rounded border font-medium leading-none bg-warning/15 text-warning border-warning/25 hover:bg-warning/25 transition-colors"
+                      title={`${openTaskCount} open task${openTaskCount > 1 ? 's' : ''}`}
+                      onclick="event.stopPropagation()">
+                      ✓ {openTaskCount}
+                    </a>
                   )}
                 </div>
               </div>
@@ -183,8 +204,8 @@ function getDomain(url: string): string {
                 )}
               </div>
 
-              <!-- GEOs (compact) -->
-              <div class="flex flex-wrap gap-1 items-center">
+              <!-- GEOs (compact, desktop only) -->
+              <div class="hidden md:flex flex-wrap gap-1 items-center">
                 {geos.slice(0, 4).map((g: string) => (
                   <span class="text-[10px] font-mono bg-card-2 border border-border/60 px-1 py-0.5 rounded text-gray-400 leading-none">{g}</span>
                 ))}
@@ -194,30 +215,24 @@ function getDomain(url: string): string {
                 {geos.length === 0 && <span class="text-xs text-gray-700">—</span>}
               </div>
 
-              <!-- Deal type -->
-              <div>
+              <!-- Deal + Terms + Rating: inline on mobile, columns on desktop -->
+              <div class="flex items-center gap-2 md:contents">
                 <span class={`text-xs px-2 py-0.5 rounded border font-medium ${dealTypeBadge[dtype] ?? 'bg-gray-700/40 text-gray-400 border-gray-600'}`}>
                   {dtype}
                 </span>
-              </div>
-
-              <!-- Terms -->
-              <div class="font-mono text-sm text-gray-300">{terms}</div>
-
-              <!-- Rating -->
-              <div>
+                <span class="font-mono text-sm text-gray-300">{terms}</span>
                 {op.rating != null ? (
                   <span class={`text-xs font-semibold px-2 py-0.5 rounded border ${
                     op.rating >= 8 ? 'bg-success/15 text-success border-success/25' :
                     op.rating >= 5 ? 'bg-warning/15 text-warning border-warning/25' :
                     'bg-danger/15 text-danger border-danger/25'
                   }`}>{op.rating}/10</span>
-                ) : <span class="text-gray-700 text-xs">—</span>}
+                ) : <span class="text-gray-700 text-xs hidden md:inline">—</span>}
               </div>
 
               <!-- Expand toggle -->
               <button
-                class="expand-btn text-gray-600 hover:text-gray-300 text-base transition-colors px-1 select-none"
+                class="expand-btn absolute top-3 right-3 md:static text-gray-600 hover:text-gray-300 text-base transition-colors px-1 select-none"
                 data-id={op.id}
                 title="Show details"
               >⌄</button>
