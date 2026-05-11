@@ -108,10 +108,11 @@ function getDomain(url: string): string {
     <div class="bg-card rounded-xl border border-border overflow-hidden" id="op-table">
 
       <!-- Header -->
-      <div class="grid grid-cols-[1.5rem_2fr_1.2fr_1fr_1fr_1fr_auto] gap-4 px-5 py-3 border-b border-border bg-card-2 text-xs text-gray-500 uppercase tracking-wide font-medium">
+      <div class="grid grid-cols-[1.5rem_2fr_1.2fr_1.2fr_0.8fr_0.8fr_0.8fr_auto] gap-4 px-5 py-3 border-b border-border bg-card-2 text-xs text-gray-500 uppercase tracking-wide font-medium">
         <div></div>
         <div>Name / Brand</div>
         <div>Contact</div>
+        <div>GEOs</div>
         <div>Deal</div>
         <div>Terms</div>
         <div>Rating</div>
@@ -146,7 +147,7 @@ function getDomain(url: string): string {
             data-geo={geos.join(' ').toLowerCase()}
           >
             <!-- Main row -->
-            <div class="grid grid-cols-[1.5rem_2fr_1.2fr_1fr_1fr_1fr_auto] gap-4 px-5 py-3.5 hover:bg-card-2/40 transition-colors items-center">
+            <div class="grid grid-cols-[1.5rem_2fr_1.2fr_1.2fr_0.8fr_0.8fr_0.8fr_auto] gap-4 px-5 py-3.5 hover:bg-card-2/40 transition-colors items-center">
 
               <!-- Drag handle -->
               <div class="drag-handle text-gray-700 hover:text-gray-400 cursor-grab active:cursor-grabbing select-none text-base leading-none" title="Drag to reorder">⠿</div>
@@ -180,6 +181,17 @@ function getDomain(url: string): string {
                 ) : (
                   <span class="text-xs text-gray-700">—</span>
                 )}
+              </div>
+
+              <!-- GEOs (compact) -->
+              <div class="flex flex-wrap gap-1 items-center">
+                {geos.slice(0, 4).map((g: string) => (
+                  <span class="text-[10px] font-mono bg-card-2 border border-border/60 px-1 py-0.5 rounded text-gray-400 leading-none">{g}</span>
+                ))}
+                {geos.length > 4 && (
+                  <span class="text-[10px] text-gray-600 font-mono leading-none">+{geos.length - 4}</span>
+                )}
+                {geos.length === 0 && <span class="text-xs text-gray-700">—</span>}
               </div>
 
               <!-- Deal type -->
@@ -285,8 +297,9 @@ function getDomain(url: string): string {
               </div>
 
               <!-- Edit link -->
-              <div class="mt-4 pt-3 border-t border-border/30">
-                <a href={`/operators/${op.id}`} class="text-xs text-gray-500 hover:text-accent transition-colors">
+              <div class="mt-4 pt-3 border-t border-border/30 flex justify-end">
+                <a href={`/operators/${op.id}`}
+                  class="inline-flex items-center gap-1.5 text-xs font-medium bg-card-2 hover:bg-accent hover:text-white border border-border hover:border-accent text-gray-400 transition-all px-3 py-1.5 rounded-lg">
                   ✎ Edit operator
                 </a>
               </div>

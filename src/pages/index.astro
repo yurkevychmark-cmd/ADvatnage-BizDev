@@ -1,41 +1,78 @@
 ---
 import Layout from '../components/Layout.astro';
 import StatCard from '../components/StatCard.astro';
-import ScoreBadge from '../components/ScoreBadge.astro';
-import GeoTag from '../components/GeoTag.astro';
 import { supabase } from '../lib/supabase';
 
 const { count: buyerCount } = await supabase.from('buyers').select('*', { count: 'exact', head: true });
 const { count: operatorCount } = await supabase.from('operators').select('*', { count: 'exact', head: true });
-const { count: matchCount } = await supabase.from('matches').select('*', { count: 'exact', head: true });
-const { count: projectCount } = await supabase.from('projects').select('*', { count: 'exact', head: true });
+const { count: dealCount } = await supabase.from('projects').select('*', { count: 'exact', head: true });
 
-const { data: recentMatches } = await supabase
-  .from('matches')
-  .select('*, buyer:buyers(*), operator:operators(*)')
-  .order('score', { ascending: false })
-  .limit(5);
-
-const { data: recentProjects } = await supabase
+const { data: recentDeals } = await supabase
   .from('projects')
+  .select('*, buyer:buyers(name), operator:operators(name)')
+  .order('created_at', { ascending: false })
+  .limit(6);
+
+const { data: recentActivity } = await supabase
+  .from('activity_log')
   .select('*')
   .order('created_at', { ascending: false })
-  .limit(5);
+  .limit(8);
+
+const stageLabel: Record<string, string> = {
+  new: 'Новий',
+  negotiation: 'Переговори',
+  trial: 'Тестовий',
+  active: 'Ретеншин',
+  completed: 'Завершено',
+  no_deal: 'Не домовились',
+};
+
+const stageBadge: Record<string, string> = {
+  new:         'bg-gray-700/60 text-gray-400 border-gray-600',
+  negotiation: 'bg-yellow-500/15 text-yellow-400 border-yellow-500/25',
+  trial:       'bg-purple-500/15 text-purple-400 border-purple-500/25',
+  active:      'bg-green-500/15 text-green-400 border-green-500/25',
+  completed:   'bg-blue-500/15 text-blue-400 border-blue-500/25',
+  no_deal:     'bg-red-500/15 text-red-400 border-red-500/25',
+};
+
+const entityIcon: Record<string, string> = {
+  buyer: '⊕',
+  operator: '⊛',
+  deal: '⇋',
+};
+
+const actionColor: Record<string, string> = {
+  created: 'text-green-400 bg-green-500/10 border-green-500/20',
+  updated: 'text-yellow-400 bg-yellow-500/10 border-yellow-500/20',
+  deleted: 'text-red-400 bg-red-500/10 border-red-500/20',
+};
+
+function timeAgo(dateStr: string): string {
+  const diff = Date.now() - new Date(dateStr).getTime();
+  const m = Math.floor(diff / 60000);
+  if (m < 1) return 'just now';
+  if (m < 60) return `${m}m ago`;
+  if (m < 1440) return `${Math.floor(m / 60)}h ago`;
+  return `${Math.floor(m / 1440)}d ago`;
+}
 ---
 
 <Layout title="Dashboard">
   <div class="mb-8">
     <h1 class="text-2xl font-bold">Dashboard</h1>
-    <p class="text-gray-600 text-sm mt-1">Overview of your matchmaking pipeline</p>
+    <p class="text-gray-600 text-sm mt-1">Overview of your deals pipeline</p>
   </div>
 
-  <div class="grid grid-cols-4 gap-4 mb-8">
+  <!-- Stat cards -->
+  <div class="grid grid-cols-3 gap-4 mb-8">
     <StatCard label="Buyers" value={buyerCount ?? 0} />
     <StatCard label="Operators" value={operatorCount ?? 0} />
-    <StatCard label="Matches" value={matchCount ?? 0} />
-    <StatCard label="Projects" value={projectCount ?? 0} />
+    <StatCard label="Deals" value={dealCount ?? 0} />
   </div>
 
+  <!-- Quick actions -->
   <div class="flex gap-3 mb-8">
     <a href="/buyers/add" class="bg-accent hover:bg-accent-dark text-white text-sm font-medium px-5 py-2.5 rounded-lg transition-colors shadow-lg shadow-accent/20">
       + Add Buyer
@@ -43,75 +80,66 @@ const { data: recentProjects } = await supabase
     <a href="/operators/add" class="bg-accent hover:bg-accent-dark text-white text-sm font-medium px-5 py-2.5 rounded-lg transition-colors shadow-lg shadow-accent/20">
       + Add Operator
     </a>
-    <a href="/matchmaking" class="bg-card-2 hover:bg-border text-gray-300 hover:text-white text-sm font-medium px-5 py-2.5 rounded-lg transition-colors border border-border">
-      Run Matchmaking
+    <a href="/deals" class="bg-card-2 hover:bg-border text-gray-300 hover:text-white text-sm font-medium px-5 py-2.5 rounded-lg transition-colors border border-border">
+      View Deals
     </a>
   </div>
 
   <div class="grid grid-cols-2 gap-6">
+    <!-- Recent Deals -->
     <div class="bg-card rounded-xl border border-border p-6">
       <h2 class="text-base font-semibold mb-4 flex items-center gap-2">
         <span class="w-1.5 h-4 bg-accent rounded-full inline-block"></span>
-        Top Matches
+        Recent Deals
       </h2>
-      {(!recentMatches || recentMatches.length === 0) ? (
-        <p class="text-gray-600 text-sm">No matches yet. Add buyers and operators, then run matchmaking.</p>
+      {(!recentDeals || recentDeals.length === 0) ? (
+        <p class="text-gray-600 text-sm">No deals yet. <a href="/deals" class="text-accent hover:underline">Add a deal →</a></p>
       ) : (
-        <div class="space-y-2">
-          {recentMatches.map((m: any) => (
-            <div class="flex items-center justify-between p-3 bg-card-2 rounded-lg border border-border hover:border-accent/30 transition-colors">
-              <div>
-                <div class="text-sm">
-                  <span class="font-medium">{m.buyer?.name}</span>
-                  <span class="text-gray-600 mx-2">↔</span>
-                  <span class="font-medium">{m.operator?.name}</span>
+        <div class="space-y-1">
+          {(recentDeals as any[]).map(d => {
+            const stage = d.pipeline_stage ?? 'new';
+            return (
+              <a href="/deals" class="flex items-center justify-between py-2.5 border-b border-border/40 last:border-0 hover:bg-card-2/40 -mx-2 px-2 rounded transition-colors group">
+                <div class="min-w-0">
+                  <p class="text-sm text-gray-200 group-hover:text-white transition-colors truncate">
+                    {d.buyer?.name ?? '—'}
+                    <span class="text-gray-600 mx-1.5">↔</span>
+                    {d.operator?.name ?? '—'}
+                  </p>
                 </div>
-                <div class="flex gap-1 mt-1">
-                  {(m.geo_overlap ?? []).map((g: string) => <GeoTag code={g} />)}
-                </div>
-              </div>
-              <ScoreBadge score={m.score} />
-            </div>
-          ))}
+                <span class={`text-xs px-2 py-0.5 rounded border font-medium shrink-0 ml-3 ${stageBadge[stage] ?? stageBadge.new}`}>
+                  {stageLabel[stage] ?? stage}
+                </span>
+              </a>
+            );
+          })}
         </div>
       )}
     </div>
 
+    <!-- Recent Activity -->
     <div class="bg-card rounded-xl border border-border p-6">
       <h2 class="text-base font-semibold mb-4 flex items-center gap-2">
         <span class="w-1.5 h-4 bg-accent rounded-full inline-block"></span>
-        Recent Projects
+        Recent Activity
       </h2>
-      {(!recentProjects || recentProjects.length === 0) ? (
-        <p class="text-gray-600 text-sm">No projects yet. Use the calculator to create one.</p>
+      {(!recentActivity || recentActivity.length === 0) ? (
+        <p class="text-gray-600 text-sm">No activity yet.</p>
       ) : (
-        <table class="w-full text-sm">
-          <thead>
-            <tr class="text-gray-600 text-xs uppercase tracking-wide">
-              <th class="text-left pb-3">Name</th>
-              <th class="text-left pb-3">Status</th>
-              <th class="text-right pb-3">ROI</th>
-            </tr>
-          </thead>
-          <tbody>
-            {recentProjects.map((p: any) => (
-              <tr class="border-t border-border">
-                <td class="py-2.5 text-gray-300">{p.name}</td>
-                <td class="py-2.5">
-                  <span class={`text-xs px-2 py-0.5 rounded border ${
-                    p.status === 'active' ? 'bg-success/15 text-success border-success/30' :
-                    p.status === 'completed' ? 'bg-accent/15 text-accent border-accent/30' :
-                    'bg-card-2 text-gray-500 border-border'
-                  }`}>{p.status}</span>
-                </td>
-                <td class={`py-2.5 text-right font-mono font-semibold ${p.calc_roi >= 0 ? 'text-success' : 'text-danger'}`}>
-                  {p.calc_roi != null ? `${p.calc_roi}%` : '—'}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+        <div class="space-y-0">
+          {(recentActivity as any[]).map(entry => (
+            <div class="flex items-center gap-3 py-2.5 border-b border-border/40 last:border-0">
+              <span class="text-gray-600 text-sm shrink-0 w-4">{entityIcon[entry.entity_type] ?? '·'}</span>
+              <p class="text-sm text-gray-300 truncate flex-1">{entry.entity_name}</p>
+              <span class={`text-xs px-1.5 py-0.5 rounded border font-medium capitalize shrink-0 ${actionColor[entry.action] ?? 'text-gray-400 bg-gray-700/20 border-gray-600'}`}>
+                {entry.action}
+              </span>
+              <span class="text-xs text-gray-600 shrink-0 w-14 text-right">{timeAgo(entry.created_at)}</span>
+            </div>
+          ))}
+        </div>
       )}
+      <a href="/log" class="block mt-3 text-xs text-gray-600 hover:text-accent transition-colors">View full journal →</a>
     </div>
   </div>
 </Layout>
