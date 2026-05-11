@@ -112,18 +112,29 @@ function getDomain(url: string): string {
               <!-- Drag handle -->
               <div class="drag-handle text-gray-700 hover:text-gray-400 cursor-grab active:cursor-grabbing select-none text-base leading-none" title="Drag to reorder">⠿</div>
 
-              <!-- Name -->
+              <!-- Name + Traffic tags -->
               <div class="min-w-0">
                 <a href={`/operators/${op.id}`} class="font-medium text-sm hover:text-accent transition-colors truncate block">{op.name ?? '—'}</a>
                 {op.brand_name && op.brand_name !== op.name && (
                   <p class="text-xs text-gray-600 truncate">{op.brand_name}</p>
                 )}
+                {traffic.length > 0 && (
+                  <div class="flex flex-wrap gap-1 mt-1">
+                    {traffic.map((t: string) => (
+                      <span class="text-xs bg-card-2 border border-border/60 px-1.5 py-0.5 rounded text-gray-500 leading-none">{t}</span>
+                    ))}
+                  </div>
+                )}
               </div>
 
-              <!-- Contact -->
+              <!-- Contact (click to copy) -->
               <div class="min-w-0">
                 {op.contact ? (
-                  <span class="text-xs text-accent font-mono truncate block">{op.contact}</span>
+                  <button
+                    class="text-xs text-accent font-mono truncate block hover:text-accent/70 cursor-pointer transition-colors text-left"
+                    onclick={`event.stopPropagation();copyText('${op.contact}')`}
+                    title="Click to copy"
+                  >{op.contact}</button>
                 ) : (
                   <span class="text-xs text-gray-700">—</span>
                 )}

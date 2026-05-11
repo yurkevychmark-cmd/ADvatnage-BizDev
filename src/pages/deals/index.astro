@@ -12,8 +12,9 @@ if (Astro.request.method === 'POST') {
     const { data: buyer } = await supabase.from('buyers').select('name').eq('id', buyerId).single();
     const { data: op } = await supabase.from('operators').select('name').eq('id', opId).single();
     const dealType = form.get('deal_type') as string;
+    const dealName = `${(buyer as any)?.name ?? '?'} ↔ ${(op as any)?.name ?? '?'}`;
     await supabase.from('projects').insert({
-      name: `${(buyer as any)?.name ?? '?'} ↔ ${(op as any)?.name ?? '?'}`,
+      name: dealName,
       buyer_id: buyerId || null,
       operator_id: opId || null,
       pipeline_stage: form.get('pipeline_stage') || 'new',
@@ -28,6 +29,7 @@ if (Astro.request.method === 'POST') {
       notes: (form.get('notes') as string) || null,
       status: 'active',
     });
+    await supabase.from('activity_log').insert({ entity_type: 'deal', entity_name: dealName, action: 'created' });
   }
 
   if (action === 'update_stage') {
@@ -377,6 +379,57 @@ const dealTypeLabel: Record<string, string> = { CPA: 'CPA', RevShare: 'RevShare'
                   </button>
                 </div>
               </form>
+
+              <!-- File attachments -->
+              <div class="mt-4 pt-4 border-t border-border/50">
+                <p class="text-xs text-gray-500 uppercase tracking-wide mb-3">Attachments</p>
+                <div class="grid grid-cols-2 gap-4">
+                  <!-- Deal Terms -->
+                  <div>
+                    <p class="text-xs text-gray-600 mb-1.5">Deal Terms / Offer</p>
+                    {deal.deal_terms_url ? (
+                      <div class="flex items-center gap-2">
+                        <a href={deal.deal_terms_url} target="_blank" class="text-xs text-accent hover:underline flex items-center gap-1">
+                          <span>📄</span> View file
+                        </a>
+                        <span class="text-gray-700 text-xs">·</span>
+                        <label class="text-xs text-gray-500 hover:text-gray-300 cursor-pointer transition-colors">
+                          Replace
+                          <input type="file" class="hidden upload-input" data-deal={deal.id} data-type="deal_terms" />
+                        </label>
+                      </div>
+                    ) : (
+                      <label class={`flex items-center gap-2 border border-dashed border-border hover:border-accent/40 rounded-lg px-3 py-2 cursor-pointer transition-colors group upload-zone`} data-deal={deal.id} data-type="deal_terms">
+                        <span class="text-gray-600 group-hover:text-accent transition-colors text-base">↑</span>
+                        <span class="text-xs text-gray-600 group-hover:text-gray-400 transition-colors">Upload terms / PDF</span>
+                        <input type="file" class="hidden upload-input" data-deal={deal.id} data-type="deal_terms" />
+                      </label>
+                    )}
+                  </div>
+                  <!-- Invoice -->
+                  <div>
+                    <p class="text-xs text-gray-600 mb-1.5">Invoice</p>
+                    {deal.invoice_url ? (
+                      <div class="flex items-center gap-2">
+                        <a href={deal.invoice_url} target="_blank" class="text-xs text-accent hover:underline flex items-center gap-1">
+                          <span>🧾</span> View file
+                        </a>
+                        <span class="text-gray-700 text-xs">·</span>
+                        <label class="text-xs text-gray-500 hover:text-gray-300 cursor-pointer transition-colors">
+                          Replace
+                          <input type="file" class="hidden upload-input" data-deal={deal.id} data-type="invoice" />
+                        </label>
+                      </div>
+                    ) : (
+                      <label class={`flex items-center gap-2 border border-dashed border-border hover:border-accent/40 rounded-lg px-3 py-2 cursor-pointer transition-colors group upload-zone`} data-deal={deal.id} data-type="invoice">
+                        <span class="text-gray-600 group-hover:text-accent transition-colors text-base">↑</span>
+                        <span class="text-xs text-gray-600 group-hover:text-gray-400 transition-colors">Upload invoice / PDF</span>
+                        <input type="file" class="hidden upload-input" data-deal={deal.id} data-type="invoice" />
+                      </label>
+                    )}
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
         );
@@ -412,6 +465,35 @@ const dealTypeLabel: Record<string, string> = { CPA: 'CPA', RevShare: 'RevShare'
       const expanded = !panel?.classList.contains('hidden');
       panel?.classList.toggle('hidden');
       btn.textContent = expanded ? '⌄' : '⌃';
+    });
+  });
+
+  // ── File upload ────────────────────────────────────────────────────────
+  document.querySelectorAll('.upload-input').forEach(input => {
+    input.addEventListener('change', async (e) => {
+      const file = e.target.files?.[0];
+      if (!file) return;
+      const dealId = input.dataset.deal;
+      const fileType = input.dataset.type;
+      const label = input.closest('label');
+      if (label) label.textContent = '⏳ Uploading…';
+
+      const fd = new FormData();
+      fd.append('file', file);
+      fd.append('deal_id', dealId);
+      fd.append('file_type', fileType);
+
+      const res = await fetch('/api/upload-deal-file', { method: 'POST', body: fd });
+      if (res.ok) {
+        window.copyText?.('');  // clear any toast
+        const toast = document.getElementById('copy-toast');
+        if (toast) { toast.textContent = '✓ File uploaded'; toast.style.opacity = '1'; setTimeout(() => toast.style.opacity = '0', 2500); }
+        setTimeout(() => window.location.reload(), 600);
+      } else {
+        const err = await res.json();
+        alert('Upload failed: ' + (err.error ?? 'Unknown error'));
+        if (label) label.textContent = '↑ Upload failed — retry';
+      }
     });
   });
 

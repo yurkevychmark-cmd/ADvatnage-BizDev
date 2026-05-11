@@ -69,9 +69,12 @@ const buyersJson = JSON.stringify(buyers ?? []);
       {(buyers as Buyer[]).map(buyer => {
         const bAny = buyer as any;
         const workedWith = bAny.worked_with === true;
+        const telegram = bAny.contact_telegram as string | null;
+        const email = bAny.contact_email as string | null;
+        const contactToCopy = telegram || email || null;
         return (
           <div
-            class="buyer-card bg-card rounded-xl border border-border hover:border-accent/40 transition-all group relative overflow-hidden cursor-pointer"
+            class="buyer-card bg-card rounded-xl border border-border hover:border-accent/40 transition-all group flex flex-col relative overflow-hidden"
             draggable="true"
             data-id={buyer.id}
             data-name={`${buyer.name} ${buyer.contact_name ?? ''}`.toLowerCase()}
@@ -81,35 +84,32 @@ const buyersJson = JSON.stringify(buyers ?? []);
             data-type={bAny.type ?? 'EXTERNAL'}
           >
             <div class="absolute inset-0 bg-gradient-to-br from-accent/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none"></div>
-
             <!-- Drag handle -->
             <div class="drag-handle absolute top-3 left-3 text-gray-700 group-hover:text-gray-500 cursor-grab select-none z-10 opacity-0 group-hover:opacity-100 transition-opacity text-lg leading-none" title="Drag to reorder">⠿</div>
 
-            <!-- Worked-with toggle button -->
-            <button
-              class={`worked-btn absolute top-3 right-3 z-10 flex items-center gap-1 text-xs px-2 py-1 rounded-full border transition-all ${
-                workedWith
-                  ? 'bg-success/15 text-success border-success/30 hover:bg-success/25'
-                  : 'bg-card-2 text-gray-600 border-border hover:text-gray-400 hover:border-gray-500'
-              }`}
-              data-id={buyer.id}
-              data-worked={workedWith ? '1' : '0'}
-              title={workedWith ? 'Mark as not worked with' : 'Mark as worked with'}
-            >
-              {workedWith ? '✓ Worked' : '○ Not worked'}
-            </button>
-
-            <!-- Main clickable area → edit page -->
-            <a href={`/buyers/${buyer.id}`} class="block p-6 pt-10">
-              <div class="flex items-start justify-between mb-2">
-                <div class="flex-1 min-w-0 pr-2">
-                  <h3 class="font-semibold group-hover:text-accent transition-colors truncate">{buyer.name}</h3>
-                  {buyer.contact_name && <p class="text-gray-500 text-xs mt-0.5">{buyer.contact_name}</p>}
-                </div>
-                <span class="text-xs font-mono bg-card-2 border border-border px-2 py-1 rounded text-gray-400 shrink-0">
+            <!-- Main link area -->
+            <a href={`/buyers/${buyer.id}`} class="block p-5 pl-8 flex-1">
+              <!-- Name + Budget row -->
+              <div class="flex items-start justify-between gap-2 mb-1">
+                <h3 class="font-semibold group-hover:text-accent transition-colors leading-snug">{buyer.name}</h3>
+                <span class="text-xs font-mono bg-card-2 border border-border px-2 py-1 rounded text-gray-400 shrink-0 mt-0.5">
                   ${Number(buyer.monthly_budget_capacity || 0).toLocaleString()}
                 </span>
               </div>
+
+              <!-- Contact subtitle (clickable copy) -->
+              {(buyer.contact_name || contactToCopy) && (
+                <div class="flex items-center gap-1.5 mb-3">
+                  {buyer.contact_name && <span class="text-gray-500 text-xs">{buyer.contact_name}</span>}
+                  {contactToCopy && (
+                    <button
+                      class="text-xs text-accent/70 hover:text-accent font-mono transition-colors"
+                      onclick={`event.preventDefault();event.stopPropagation();copyText('${contactToCopy}')`}
+                      title="Click to copy"
+                    >{contactToCopy}</button>
+                  )}
+                </div>
+              )}
 
               <!-- Type badge -->
               <div class="mb-3">
@@ -123,9 +123,7 @@ const buyersJson = JSON.stringify(buyers ?? []);
               </div>
 
               {buyer.rating != null && (
-                <div class="mb-3">
-                  <RatingBadge rating={buyer.rating} />
-                </div>
+                <div class="mb-3"><RatingBadge rating={buyer.rating} /></div>
               )}
 
               <div class="flex flex-wrap gap-1 mb-2">
@@ -136,6 +134,23 @@ const buyersJson = JSON.stringify(buyers ?? []);
                 {(buyer.traffic_types ?? []).map(t => <TrafficTag type={t} />)}
               </div>
             </a>
+
+            <!-- Bottom strip: worked-with toggle -->
+            <div class="border-t border-border/40 px-5 py-2 flex items-center justify-between bg-card-2/20">
+              <button
+                class={`worked-btn flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-full border transition-all ${
+                  workedWith
+                    ? 'bg-success/15 text-success border-success/30 hover:bg-success/25'
+                    : 'text-gray-600 border-border/60 hover:text-gray-400 hover:border-gray-500'
+                }`}
+                data-id={buyer.id}
+                data-worked={workedWith ? '1' : '0'}
+                title={workedWith ? 'Mark as not worked with' : 'Mark as worked with'}
+              >
+                <span>{workedWith ? '✓' : '○'}</span>
+                <span>{workedWith ? 'Worked with' : 'Not worked with'}</span>
+              </button>
+            </div>
           </div>
         );
       })}
@@ -150,7 +165,7 @@ const buyersJson = JSON.stringify(buyers ?? []);
 <script define:vars={{ buyersJson }}>
   const buyers = JSON.parse(buyersJson);
   const grid = document.getElementById('grid');
-  const cards = () => [...document.querySelectorAll('.buyer-card')];
+  const getCards = () => [...document.querySelectorAll('.buyer-card')];
   const emptyFilter = document.getElementById('empty-filter');
   const countEl = document.getElementById('count');
 
@@ -161,9 +176,8 @@ const buyersJson = JSON.stringify(buyers ?? []);
     const traffic = document.getElementById('filter-traffic').value.toLowerCase();
     const ratingMin = Number(document.getElementById('filter-rating').value) || 0;
     const typeFilter = document.getElementById('filter-type').value;
-
     let visible = 0;
-    cards().forEach(card => {
+    getCards().forEach(card => {
       const ok =
         (!search || (card.dataset.name ?? '').includes(search)) &&
         (!geo || (card.dataset.geo ?? '').includes(geo)) &&
@@ -173,10 +187,9 @@ const buyersJson = JSON.stringify(buyers ?? []);
       card.style.display = ok ? '' : 'none';
       if (ok) visible++;
     });
-    countEl.textContent = `${visible} of ${cards().length}`;
+    countEl.textContent = `${visible} of ${getCards().length}`;
     emptyFilter.classList.toggle('hidden', visible > 0);
   }
-
   ['search', 'filter-geo', 'filter-traffic', 'filter-rating', 'filter-type'].forEach(id => {
     document.getElementById(id)?.addEventListener('input', applyFilters);
     document.getElementById(id)?.addEventListener('change', applyFilters);
@@ -191,19 +204,18 @@ const buyersJson = JSON.stringify(buyers ?? []);
       const id = btn.dataset.id;
       const newWorked = btn.dataset.worked !== '1';
       btn.dataset.worked = newWorked ? '1' : '0';
-      // Update appearance immediately
+      const icon = btn.querySelector('span:first-child');
+      const label = btn.querySelector('span:last-child');
       if (newWorked) {
-        btn.className = btn.className
-          .replace('bg-card-2 text-gray-600 border-border hover:text-gray-400 hover:border-gray-500', '')
-          + ' bg-success/15 text-success border-success/30 hover:bg-success/25';
-        btn.textContent = '✓ Worked';
-        btn.title = 'Mark as not worked with';
+        btn.classList.remove('text-gray-600', 'border-border/60', 'hover:text-gray-400', 'hover:border-gray-500');
+        btn.classList.add('bg-success/15', 'text-success', 'border-success/30', 'hover:bg-success/25');
+        if (icon) icon.textContent = '✓';
+        if (label) label.textContent = 'Worked with';
       } else {
-        btn.className = btn.className
-          .replace('bg-success/15 text-success border-success/30 hover:bg-success/25', '')
-          + ' bg-card-2 text-gray-600 border-border hover:text-gray-400 hover:border-gray-500';
-        btn.textContent = '○ Not worked';
-        btn.title = 'Mark as worked with';
+        btn.classList.remove('bg-success/15', 'text-success', 'border-success/30', 'hover:bg-success/25');
+        btn.classList.add('text-gray-600', 'border-border/60', 'hover:text-gray-400', 'hover:border-gray-500');
+        if (icon) icon.textContent = '○';
+        if (label) label.textContent = 'Not worked with';
       }
       await fetch('/api/toggle-worked', {
         method: 'POST',
@@ -215,7 +227,6 @@ const buyersJson = JSON.stringify(buyers ?? []);
 
   // ── Drag and drop ─────────────────────────────────────────────────────
   let dragSrc = null;
-
   if (grid) {
     grid.addEventListener('dragstart', e => {
       const card = e.target.closest('.buyer-card');
@@ -224,46 +235,29 @@ const buyersJson = JSON.stringify(buyers ?? []);
       card.style.opacity = '0.4';
       e.dataTransfer.effectAllowed = 'move';
     });
-
-    grid.addEventListener('dragend', e => {
-      const card = e.target.closest('.buyer-card');
-      if (card) card.style.opacity = '';
+    grid.addEventListener('dragend', () => {
+      if (dragSrc) dragSrc.style.opacity = '';
       dragSrc = null;
-      document.querySelectorAll('.buyer-card').forEach(c => c.classList.remove('ring-2', 'ring-accent'));
+      getCards().forEach(c => c.classList.remove('ring-2', 'ring-accent'));
     });
-
     grid.addEventListener('dragover', e => {
       e.preventDefault();
-      e.dataTransfer.dropEffect = 'move';
       const card = e.target.closest('.buyer-card');
-      document.querySelectorAll('.buyer-card').forEach(c => c.classList.remove('ring-2', 'ring-accent'));
+      getCards().forEach(c => c.classList.remove('ring-2', 'ring-accent'));
       if (card && card !== dragSrc) card.classList.add('ring-2', 'ring-accent');
     });
-
     grid.addEventListener('drop', e => {
       e.preventDefault();
       const target = e.target.closest('.buyer-card');
       if (!target || target === dragSrc || !dragSrc) return;
-      document.querySelectorAll('.buyer-card').forEach(c => c.classList.remove('ring-2', 'ring-accent'));
-
-      // Determine insert position: before or after target
+      getCards().forEach(c => c.classList.remove('ring-2', 'ring-accent'));
       const rect = target.getBoundingClientRect();
-      const mid = rect.left + rect.width / 2;
-      if (e.clientX < mid) {
-        grid.insertBefore(dragSrc, target);
-      } else {
-        grid.insertBefore(dragSrc, target.nextSibling);
-      }
-      saveOrder();
-    });
-  }
-
-  function saveOrder() {
-    const ids = cards().map(c => c.dataset.id).filter(Boolean);
-    fetch('/api/reorder', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ table: 'buyers', ids }),
+      grid.insertBefore(dragSrc, e.clientX < rect.left + rect.width / 2 ? target : target.nextSibling);
+      fetch('/api/reorder', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ table: 'buyers', ids: getCards().map(c => c.dataset.id).filter(Boolean) }),
+      });
     });
   }
 
@@ -274,8 +268,7 @@ const buyersJson = JSON.stringify(buyers ?? []);
       b.name, b.type ?? 'EXTERNAL', b.worked_with ? 'Yes' : 'No',
       b.contact_name ?? '', b.contact_email ?? '', b.contact_telegram ?? '',
       (b.geo_expertise ?? []).join(';'), (b.traffic_types ?? []).join(';'),
-      b.monthly_budget_capacity ?? '', b.rating ?? '',
-      (b.notes ?? '').replace(/\n/g, ' '),
+      b.monthly_budget_capacity ?? '', b.rating ?? '', (b.notes ?? '').replace(/\n/g, ' '),
     ]);
     const csv = [headers, ...rows].map(r => r.map(v => `"${String(v).replace(/"/g, '""')}"`).join(',')).join('\n');
     const a = document.createElement('a');

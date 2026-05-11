@@ -34,5 +34,19 @@ const { title } = Astro.props;
     <main class="flex-1 ml-60 p-8 min-h-screen">
       <slot />
     </main>
+    <!-- Global: copy-to-clipboard toast -->
+    <div id="copy-toast" class="fixed bottom-5 right-5 bg-card border border-border text-gray-200 text-sm px-4 py-2.5 rounded-lg shadow-xl z-[999] opacity-0 pointer-events-none transition-opacity duration-200"></div>
   </body>
 </html>
+<script>
+  window.copyText = async (text: string) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      const toast = document.getElementById('copy-toast')!;
+      toast.textContent = `✓ Copied: ${text}`;
+      toast.style.opacity = '1';
+      clearTimeout((window as any)._copyToast);
+      (window as any)._copyToast = setTimeout(() => { toast.style.opacity = '0'; }, 2000);
+    } catch {}
+  };
+</script>

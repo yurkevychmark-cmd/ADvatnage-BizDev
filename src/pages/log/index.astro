@@ -8,16 +8,19 @@ const { data: entries, error } = await supabase
   .order('created_at', { ascending: false })
   .limit(200);
 
-function timeAgo(dateStr: string): string {
-  const diff = Date.now() - new Date(dateStr).getTime();
+function formatDate(dateStr: string): { relative: string; full: string } {
+  const date = new Date(dateStr);
+  const diff = Date.now() - date.getTime();
   const m = Math.floor(diff / 60000);
-  if (m < 1) return 'just now';
-  if (m < 60) return `${m}m ago`;
-  const h = Math.floor(m / 60);
-  if (h < 24) return `${h}h ago`;
-  const d = Math.floor(h / 24);
-  if (d < 7) return `${d}d ago`;
-  return new Date(dateStr).toLocaleDateString();
+  let relative = 'just now';
+  if (m >= 1 && m < 60) relative = `${m}m ago`;
+  else if (m >= 60 && m < 1440) relative = `${Math.floor(m / 60)}h ago`;
+  else if (m >= 1440) relative = `${Math.floor(m / 1440)}d ago`;
+  const full = date.toLocaleString('uk-UA', {
+    day: '2-digit', month: '2-digit', year: 'numeric',
+    hour: '2-digit', minute: '2-digit',
+  });
+  return { relative, full };
 }
 
 const actionColor: Record<string, string> = {
@@ -29,6 +32,7 @@ const actionColor: Record<string, string> = {
 const entityIcon: Record<string, string> = {
   buyer: '⊕',
   operator: '⊛',
+  deal: '⇋',
 };
 ---
 
@@ -68,7 +72,7 @@ const entityIcon: Record<string, string> = {
         <div>Type</div>
         <div>Name</div>
         <div>Action</div>
-        <div>When</div>
+        <div class="text-right">Date / Time</div>
       </div>
       {(entries as any[]).map(entry => (
         <div class="grid grid-cols-[auto_1fr_auto_auto] gap-4 px-6 py-3.5 border-b border-border last:border-0 items-center hover:bg-card-2/40 transition-colors">
@@ -82,8 +86,13 @@ const entityIcon: Record<string, string> = {
               {entry.action}
             </span>
           </div>
-          <div class="text-xs text-gray-500 font-mono whitespace-nowrap" title={new Date(entry.created_at).toLocaleString()}>
-            {timeAgo(entry.created_at)}
+          <div class="text-right">
+            {(() => { const { relative, full } = formatDate(entry.created_at); return (
+              <>
+                <p class="text-xs text-gray-400 font-mono whitespace-nowrap">{full}</p>
+                <p class="text-xs text-gray-600 whitespace-nowrap">{relative}</p>
+              </>
+            ); })()}
           </div>
         </div>
       ))}
