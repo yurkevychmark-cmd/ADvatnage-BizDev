@@ -180,15 +180,15 @@ function getDomain(url: string): string {
                       {stageLabel[primaryStage]}
                     </span>
                   )}
-                  {openTaskCount > 0 && (
-                    <a href={`/tasks?status=open`}
-                      class="text-[10px] px-1.5 py-0.5 rounded border font-medium leading-none bg-warning/15 text-warning border-warning/25 hover:bg-warning/25 transition-colors"
-                      title={`${openTaskCount} open task${openTaskCount > 1 ? 's' : ''}`}
-                      onclick="event.stopPropagation()">
-                      ✓ {openTaskCount}
-                    </a>
-                  )}
                 </div>
+                {openTaskCount > 0 && (
+                  <a href="/tasks"
+                    class="inline-flex items-center gap-1 mt-1.5 text-xs font-semibold px-2 py-0.5 rounded-md border bg-warning/20 text-warning border-warning/40 hover:bg-warning/30 transition-colors"
+                    title={`${openTaskCount} відкритих таск${openTaskCount > 1 ? 'ів' : ''}`}
+                    onclick="event.stopPropagation()">
+                    📋 {openTaskCount} task{openTaskCount > 1 ? 's' : ''}
+                  </a>
+                )}
               </div>
 
               <!-- Contact (click to copy) -->
