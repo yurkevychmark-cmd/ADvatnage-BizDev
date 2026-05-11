@@ -13,7 +13,7 @@ if (Astro.request.method === 'POST') {
     const { data: op } = await supabase.from('operators').select('name').eq('id', opId).single();
     const dealType = form.get('deal_type') as string;
     const dealName = `${(buyer as any)?.name ?? '?'} ↔ ${(op as any)?.name ?? '?'}`;
-    await supabase.from('projects').insert({
+    const { error: insertError } = await supabase.from('projects').insert({
       name: dealName,
       buyer_id: buyerId || null,
       operator_id: opId || null,
@@ -30,6 +30,9 @@ if (Astro.request.method === 'POST') {
       notes: (form.get('notes') as string) || null,
       status: 'active',
     });
+    if (insertError) {
+      return Astro.redirect(`/deals?error=${encodeURIComponent(insertError.message)}`);
+    }
     await supabase.from('activity_log').insert({ entity_type: 'deal', entity_name: dealName, action: 'created' });
   }
 
@@ -61,6 +64,7 @@ if (Astro.request.method === 'POST') {
 }
 
 const stageFilter = Astro.url.searchParams.get('stage') ?? 'all';
+const createError = Astro.url.searchParams.get('error');
 
 const query = supabase
   .from('projects')
@@ -100,7 +104,7 @@ const stageLabel: Record<string, string> = {
 const stageBadge: Record<string, string> = {
   new:         'bg-gray-700/60 text-gray-300 border-gray-600',
   negotiation: 'bg-warning/20 text-warning border-warning/30',
-  trial:       'bg-accent/20 text-accent border-accent/30',
+  trial:       'bg-purple-500/20 text-purple-400 border-purple-500/30',
   active:      'bg-success/20 text-success border-success/30',
   completed:   'bg-blue-500/20 text-blue-400 border-blue-500/30',
   no_deal:     'bg-danger/20 text-danger border-danger/30',
@@ -147,6 +151,13 @@ const dealTypeLabel: Record<string, string> = { CPA: 'CPA', RevShare: 'RevShare'
       + New Deal
     </button>
   </div>
+
+  {createError && (
+    <div class="mb-4 bg-danger/10 border border-danger/30 text-danger text-sm rounded-lg px-4 py-3">
+      <strong>DB Error:</strong> {createError}
+      <p class="text-xs mt-1 text-danger/70">Можливо, не вистачає колонок у таблиці. Запустіть SQL-міграцію (див. нижче).</p>
+    </div>
+  )}
 
   <!-- New deal form (hidden by default) -->
   <div id="new-deal-form" class="hidden mb-6 bg-card rounded-xl border border-border p-6">
