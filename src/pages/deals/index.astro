@@ -73,14 +73,23 @@ const { data: buyers } = await supabase.from('buyers').select('id, name').order(
 const { data: operators } = await supabase.from('operators').select('id, name, deal_type, cpa_value, revshare_pct, spend_pct').order('name');
 
 const stages = [
-  { key: 'all',         label: 'All' },
-  { key: 'new',         label: 'New' },
-  { key: 'negotiation', label: 'Negotiation' },
-  { key: 'trial',       label: 'Trial' },
-  { key: 'active',      label: 'Active' },
-  { key: 'completed',   label: 'Completed' },
-  { key: 'no_deal',     label: 'No Deal' },
+  { key: 'all',         label: 'Всі' },
+  { key: 'new',         label: 'Новий' },
+  { key: 'negotiation', label: 'Переговори' },
+  { key: 'trial',       label: 'Тестовий' },
+  { key: 'active',      label: 'Ретеншин' },
+  { key: 'completed',   label: 'Завершено' },
+  { key: 'no_deal',     label: 'Не домовились' },
 ];
+
+const stageLabel: Record<string, string> = {
+  new: 'Новий',
+  negotiation: 'Переговори',
+  trial: 'Тестовий',
+  active: 'Ретеншин',
+  completed: 'Завершено',
+  no_deal: 'Не домовились',
+};
 
 const stageBadge: Record<string, string> = {
   new:         'bg-gray-700/60 text-gray-300 border-gray-600',
@@ -154,10 +163,11 @@ const dealTypeLabel: Record<string, string> = { CPA: 'CPA', RevShare: 'RevShare'
         <div>
           <label class="block text-xs text-gray-500 mb-1">Stage</label>
           <select name="pipeline_stage" class="w-full bg-card-2 border border-border rounded-lg px-3 py-2 text-sm text-gray-200 focus:border-accent outline-none">
-            <option value="new">New</option>
-            <option value="negotiation">Negotiation</option>
-            <option value="trial">Trial</option>
-            <option value="active">Active</option>
+            <option value="new">Новий</option>
+            <option value="negotiation">Переговори</option>
+            <option value="trial">Тестовий проект</option>
+            <option value="active">Ретеншин проект</option>
+            <option value="no_deal">Не домовились</option>
           </select>
         </div>
         <div>
@@ -263,7 +273,7 @@ const dealTypeLabel: Record<string, string> = { CPA: 'CPA', RevShare: 'RevShare'
                   <span class="text-gray-600 text-xs">↔</span>
                   <span class="font-semibold">{deal.operator?.name ?? '—'}</span>
                   <span class={`text-xs px-2 py-0.5 rounded border font-medium ${stageBadge[stage] ?? stageBadge.new}`}>
-                    {stage.charAt(0).toUpperCase() + stage.slice(1)}
+                    {stageLabel[stage] ?? stage}
                   </span>
                   <span class="text-xs px-2 py-0.5 rounded bg-card-2 border border-border text-gray-400">
                     {dealTypeLabel[dtype] ?? dtype} · {opValueLabel}
@@ -308,7 +318,7 @@ const dealTypeLabel: Record<string, string> = { CPA: 'CPA', RevShare: 'RevShare'
                     ['new','New'],['negotiation','Negotiation'],['trial','Trial'],
                     ['active','Active'],['completed','Completed'],['no_deal','No Deal']
                   ].map(([val, label]) => (
-                    <option value={val} selected={val === stage}>{label}</option>
+                    <option value={val} selected={val === stage}>{stageLabel[val] ?? label}</option>
                   ))}
                 </select>
               </form>

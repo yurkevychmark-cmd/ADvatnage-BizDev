@@ -4,9 +4,47 @@ import { supabase } from '../../lib/supabase';
 
 const { data: operators } = await supabase
   .from('operators')
-  .select('*')
+  .select('*, deals:projects(pipeline_stage)')
   .order('sort_order', { ascending: true, nullsFirst: false })
   .order('created_at', { ascending: false });
+
+// Stage priority: most "active" stage wins for display
+const stagePriority = ['active', 'trial', 'negotiation', 'new', 'completed', 'no_deal'];
+
+function getPrimaryStage(deals: any[]): string | null {
+  if (!deals || deals.length === 0) return null;
+  for (const s of stagePriority) {
+    if (deals.some((d: any) => d.pipeline_stage === s)) return s;
+  }
+  return null;
+}
+
+const stageLabel: Record<string, string> = {
+  new: 'Новий',
+  negotiation: 'Переговори',
+  trial: 'Тестовий',
+  active: 'Ретеншин',
+  completed: 'Завершено',
+  no_deal: 'Не домовились',
+};
+
+const stageBorderColor: Record<string, string> = {
+  active:      'border-l-success',
+  trial:       'border-l-accent',
+  negotiation: 'border-l-warning',
+  new:         'border-l-blue-500',
+  completed:   'border-l-blue-400',
+  no_deal:     'border-l-danger',
+};
+
+const stagePillColor: Record<string, string> = {
+  active:      'bg-success/15 text-success border-success/25',
+  trial:       'bg-accent/15 text-accent border-accent/25',
+  negotiation: 'bg-warning/15 text-warning border-warning/25',
+  new:         'bg-blue-500/15 text-blue-400 border-blue-500/25',
+  completed:   'bg-blue-400/10 text-blue-300 border-blue-400/20',
+  no_deal:     'bg-danger/15 text-danger border-danger/25',
+};
 
 const operatorsJson = JSON.stringify(operators ?? []);
 
@@ -85,6 +123,7 @@ function getDomain(url: string): string {
         const geos: string[] = op.target_geos ?? [];
         const traffic: string[] = op.preferred_traffic ?? [];
         const links: string[] = op.links ?? [];
+        const primaryStage = getPrimaryStage(op.deals ?? []);
         const dtype = op.deal_type ?? 'CPA';
         const terms = dtype === 'CPA'
           ? (op.cpa_value ? `$${op.cpa_value}/conv` : '—')
@@ -98,7 +137,7 @@ function getDomain(url: string): string {
 
         return (
           <div
-            class="op-row border-b border-border last:border-0"
+            class={`op-row border-b border-border last:border-0 border-l-2 ${primaryStage ? stageBorderColor[primaryStage] : 'border-l-transparent'}`}
             draggable="true"
             data-id={op.id}
             data-name={`${op.name ?? ''} ${op.brand_name ?? ''}`.toLowerCase()}
@@ -118,13 +157,16 @@ function getDomain(url: string): string {
                 {op.brand_name && op.brand_name !== op.name && (
                   <p class="text-xs text-gray-600 truncate">{op.brand_name}</p>
                 )}
-                {traffic.length > 0 && (
-                  <div class="flex flex-wrap gap-1 mt-1">
-                    {traffic.map((t: string) => (
-                      <span class="text-xs bg-card-2 border border-border/60 px-1.5 py-0.5 rounded text-gray-500 leading-none">{t}</span>
-                    ))}
-                  </div>
-                )}
+                <div class="flex flex-wrap gap-1 mt-1 items-center">
+                  {traffic.map((t: string) => (
+                    <span class="text-xs bg-card-2 border border-border/60 px-1.5 py-0.5 rounded text-gray-500 leading-none">{t}</span>
+                  ))}
+                  {primaryStage && (
+                    <span class={`text-xs px-1.5 py-0.5 rounded border font-medium leading-none ${stagePillColor[primaryStage]}`}>
+                      {stageLabel[primaryStage]}
+                    </span>
+                  )}
+                </div>
               </div>
 
               <!-- Contact (click to copy) -->
