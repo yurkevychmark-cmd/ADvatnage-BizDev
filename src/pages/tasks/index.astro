@@ -3,6 +3,8 @@ import Layout from '../../components/Layout.astro';
 import { supabase } from '../../lib/supabase';
 
 // ── POST actions ──────────────────────────────────────────────────────────
+let formError: string | null = null;
+
 if (Astro.request.method === 'POST') {
   const form = await Astro.request.formData();
   const action = form.get('_action') as string;
@@ -10,24 +12,26 @@ if (Astro.request.method === 'POST') {
   if (action === 'create') {
     const entityType = (form.get('entity_type') as string) || null;
     const entityId   = (form.get('entity_id')   as string) || null;
-    // resolve entity name if entity_id provided
-    let entityName: string | null = (form.get('entity_name') as string) || null;
+    let entityName: string | null = null;
     if (entityId && entityType) {
       const table = entityType === 'buyer' ? 'buyers' : entityType === 'operator' ? 'operators' : 'projects';
       const { data } = await supabase.from(table).select('name').eq('id', entityId).single();
       if (data) entityName = (data as any).name;
     }
-    await supabase.from('tasks').insert({
-      title:       (form.get('title') as string).trim(),
-      description: (form.get('description') as string) || null,
+    const { error } = await supabase.from('tasks').insert({
+      title:       ((form.get('title') as string) ?? '').trim(),
       entity_type: entityType,
       entity_id:   entityId || null,
       entity_name: entityName,
       assigned_to: (form.get('assigned_to') as string) || null,
+      start_date:  (form.get('start_date')  as string) || null,
       due_date:    (form.get('due_date')    as string) || null,
       priority:    (form.get('priority')    as string) || 'medium',
       status:      'open',
     });
+    if (error) {
+      return Astro.redirect(`/tasks?err=${encodeURIComponent(error.message)}`);
+    }
   }
 
   if (action === 'set_status') {
@@ -45,12 +49,16 @@ if (Astro.request.method === 'POST') {
 
 // ── Data ──────────────────────────────────────────────────────────────────
 const statusFilter = Astro.url.searchParams.get('status') ?? 'open';
+const dbError      = Astro.url.searchParams.get('err');
 
-let query = supabase.from('tasks').select('*').order('due_date', { ascending: true, nullsFirst: false }).order('created_at', { ascending: false });
-if (statusFilter !== 'all') query = query.eq('status', statusFilter);
-const { data: tasks } = await query;
+let tasksQuery = supabase
+  .from('tasks')
+  .select('*')
+  .order('due_date', { ascending: true, nullsFirst: false })
+  .order('created_at', { ascending: false });
+if (statusFilter !== 'all') tasksQuery = tasksQuery.eq('status', statusFilter);
+const { data: tasks } = await tasksQuery;
 
-// For entity selects in create form
 const { data: buyers }    = await supabase.from('buyers').select('id, name').order('name');
 const { data: operators } = await supabase.from('operators').select('id, name').order('name');
 const { data: deals }     = await supabase.from('projects').select('id, name').order('name');
@@ -59,7 +67,6 @@ const buyersJson    = JSON.stringify(buyers    ?? []);
 const operatorsJson = JSON.stringify(operators ?? []);
 const dealsJson     = JSON.stringify(deals     ?? []);
 
-// Counts for tabs
 const { count: countOpen }       = await supabase.from('tasks').select('*', { count: 'exact', head: true }).eq('status', 'open');
 const { count: countInProgress } = await supabase.from('tasks').select('*', { count: 'exact', head: true }).eq('status', 'in_progress');
 const { count: countDone }       = await supabase.from('tasks').select('*', { count: 'exact', head: true }).eq('status', 'done');
@@ -72,31 +79,29 @@ const priorityColor: Record<string, string> = {
 const priorityDot: Record<string, string> = {
   high: 'bg-danger', medium: 'bg-warning', low: 'bg-gray-600',
 };
-
 const statusBadge: Record<string, string> = {
   open:        'bg-blue-500/15 text-blue-400 border-blue-500/25',
   in_progress: 'bg-warning/15 text-warning border-warning/25',
   done:        'bg-success/15 text-success border-success/25',
 };
 const statusLabel: Record<string, string> = {
-  open: 'Open', in_progress: 'In Progress', done: 'Done',
+  open: 'Open', in_progress: 'В процесі', done: 'Виконано',
 };
 
-function isOverdue(due: string | null): boolean {
-  if (!due) return false;
+function isOverdue(due: string | null, status: string): boolean {
+  if (!due || status === 'done') return false;
   return new Date(due) < new Date(new Date().toDateString());
 }
-function formatDue(due: string | null): string {
-  if (!due) return '';
-  const d = new Date(due);
-  return d.toLocaleDateString('uk-UA', { day: '2-digit', month: '2-digit' });
+function formatDate(d: string | null): string {
+  if (!d) return '';
+  return new Date(d).toLocaleDateString('uk-UA', { day: '2-digit', month: '2-digit', year: '2-digit' });
 }
 
 const tabs = [
-  { key: 'open',        label: 'Відкриті',    count: countOpen       ?? 0 },
-  { key: 'in_progress', label: 'В процесі',   count: countInProgress ?? 0 },
-  { key: 'done',        label: 'Виконані',    count: countDone       ?? 0 },
-  { key: 'all',         label: 'Всі',         count: (countOpen ?? 0) + (countInProgress ?? 0) + (countDone ?? 0) },
+  { key: 'open',        label: 'Відкриті',  count: countOpen       ?? 0 },
+  { key: 'in_progress', label: 'В процесі', count: countInProgress ?? 0 },
+  { key: 'done',        label: 'Виконані',  count: countDone       ?? 0 },
+  { key: 'all',         label: 'Всі',       count: (countOpen ?? 0) + (countInProgress ?? 0) + (countDone ?? 0) },
 ];
 ---
 
@@ -111,41 +116,64 @@ const tabs = [
     </button>
   </div>
 
+  {dbError && (
+    <div class="mb-4 bg-danger/10 border border-danger/30 text-danger text-sm rounded-lg px-4 py-3">
+      <strong>DB Error:</strong> {dbError}
+      <p class="text-xs mt-1 text-danger/70">Можливо, потрібно додати колонки start_date або due_date в таблицю tasks. Запустіть SQL нижче.</p>
+    </div>
+  )}
+
   <!-- Create form -->
   <div id="task-form" class="hidden mb-6 bg-card rounded-xl border border-border p-6">
     <h2 class="font-semibold mb-5 text-base">New Task</h2>
     <form method="POST">
       <input type="hidden" name="_action" value="create" />
 
+      <!-- Title -->
       <div class="mb-4">
         <label class="block text-xs text-gray-500 mb-1">Title <span class="text-danger">*</span></label>
-        <input type="text" name="title" required placeholder="Describe the task…"
+        <input type="text" name="title" required placeholder="Опишіть завдання…"
           class="w-full bg-card-2 border border-border rounded-lg px-3 py-2 text-sm text-gray-200 placeholder-gray-600 focus:border-accent outline-none" />
       </div>
 
+      <!-- Linked entity -->
       <div class="grid grid-cols-2 gap-4 mb-4">
-        <!-- Entity type -->
         <div>
           <label class="block text-xs text-gray-500 mb-1">Linked to</label>
           <select id="entity-type-select" name="entity_type"
             class="w-full bg-card-2 border border-border rounded-lg px-3 py-2 text-sm text-gray-300 focus:border-accent outline-none">
-            <option value="">— General task —</option>
+            <option value="">— Загальне завдання —</option>
             <option value="operator">Operator</option>
             <option value="buyer">Buyer</option>
             <option value="deal">Deal</option>
           </select>
         </div>
-        <!-- Entity select (dynamic) -->
+        <!-- Searchable entity picker -->
         <div id="entity-select-wrapper" class="hidden">
           <label class="block text-xs text-gray-500 mb-1">Select entity</label>
-          <select id="entity-id-select" name="entity_id"
-            class="w-full bg-card-2 border border-border rounded-lg px-3 py-2 text-sm text-gray-300 focus:border-accent outline-none">
-            <option value="">— Choose —</option>
-          </select>
+          <div class="relative" id="entity-picker">
+            <input type="text" id="entity-search" placeholder="Search…" autocomplete="off"
+              class="w-full bg-card-2 border border-border rounded-lg px-3 py-2 text-sm text-gray-200 placeholder-gray-600 focus:border-accent outline-none" />
+            <input type="hidden" name="entity_id" id="entity-id-hidden" />
+            <div id="entity-dd"
+              class="hidden absolute z-50 top-full left-0 right-0 mt-1 bg-card border border-border rounded-lg shadow-2xl max-h-52 overflow-y-auto">
+            </div>
+          </div>
         </div>
       </div>
 
-      <div class="grid grid-cols-3 gap-4 mb-4">
+      <!-- Dates + Priority + Assigned -->
+      <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
+        <div>
+          <label class="block text-xs text-gray-500 mb-1">Дата старту</label>
+          <input type="date" name="start_date"
+            class="w-full bg-card-2 border border-border rounded-lg px-3 py-2 text-sm text-gray-200 focus:border-accent outline-none" />
+        </div>
+        <div>
+          <label class="block text-xs text-gray-500 mb-1">Дата завершення</label>
+          <input type="date" name="due_date"
+            class="w-full bg-card-2 border border-border rounded-lg px-3 py-2 text-sm text-gray-200 focus:border-accent outline-none" />
+        </div>
         <div>
           <label class="block text-xs text-gray-500 mb-1">Priority</label>
           <select name="priority" class="w-full bg-card-2 border border-border rounded-lg px-3 py-2 text-sm text-gray-300 focus:border-accent outline-none">
@@ -156,13 +184,8 @@ const tabs = [
         </div>
         <div>
           <label class="block text-xs text-gray-500 mb-1">Assigned to</label>
-          <input type="text" name="assigned_to" placeholder="Name…"
+          <input type="text" name="assigned_to" placeholder="Ім'я…"
             class="w-full bg-card-2 border border-border rounded-lg px-3 py-2 text-sm text-gray-200 placeholder-gray-600 focus:border-accent outline-none" />
-        </div>
-        <div>
-          <label class="block text-xs text-gray-500 mb-1">Due date</label>
-          <input type="date" name="due_date"
-            class="w-full bg-card-2 border border-border rounded-lg px-3 py-2 text-sm text-gray-200 focus:border-accent outline-none" />
         </div>
       </div>
 
@@ -182,9 +205,7 @@ const tabs = [
     {tabs.map(t => (
       <a href={`/tasks${t.key !== 'open' ? `?status=${t.key}` : ''}`}
         class={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors flex items-center gap-1.5 ${
-          statusFilter === t.key
-            ? 'bg-card text-white shadow'
-            : 'text-gray-500 hover:text-gray-300'
+          statusFilter === t.key ? 'bg-card text-white shadow' : 'text-gray-500 hover:text-gray-300'
         }`}>
         {t.label}
         {t.count > 0 && (
@@ -199,66 +220,67 @@ const tabs = [
   <!-- Task list -->
   {(!tasks || tasks.length === 0) ? (
     <div class="bg-card rounded-xl border border-border p-16 text-center">
-      <p class="text-gray-500 mb-1">No tasks here.</p>
-      <p class="text-gray-700 text-sm">Click "+ New Task" to add one.</p>
+      <p class="text-gray-500 mb-1">Тасків немає.</p>
+      <p class="text-gray-700 text-sm">Натисніть "+ New Task" щоб додати.</p>
     </div>
   ) : (
     <div class="bg-card rounded-xl border border-border overflow-hidden">
       {(tasks as any[]).map(task => {
-        const overdue = isOverdue(task.due_date) && task.status !== 'done';
+        const overdue = isOverdue(task.due_date, task.status);
+        const nextStatus = task.status === 'done' ? 'open' : task.status === 'in_progress' ? 'done' : 'in_progress';
         return (
-          <div class="flex items-center gap-4 px-5 py-3.5 border-b border-border last:border-0 hover:bg-card-2/40 transition-colors group">
+          <div class="flex items-start gap-3 px-5 py-3.5 border-b border-border last:border-0 hover:bg-card-2/40 transition-colors group">
 
-            <!-- Status toggle form -->
-            <form method="POST" class="shrink-0">
+            <!-- Status toggle -->
+            <form method="POST" class="shrink-0 mt-0.5">
               <input type="hidden" name="_action" value="set_status" />
               <input type="hidden" name="task_id" value={task.id} />
-              <input type="hidden" name="status"
-                value={task.status === 'done' ? 'open' : task.status === 'in_progress' ? 'done' : 'in_progress'} />
+              <input type="hidden" name="status" value={nextStatus} />
               <button type="submit"
                 class={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all ${
-                  task.status === 'done'
-                    ? 'bg-success border-success text-white'
-                    : task.status === 'in_progress'
-                      ? 'border-warning bg-warning/20'
-                      : 'border-gray-600 hover:border-accent'
+                  task.status === 'done'        ? 'bg-success border-success text-white' :
+                  task.status === 'in_progress' ? 'border-warning bg-warning/20' :
+                  'border-gray-600 hover:border-accent'
                 }`}
-                title={task.status === 'done' ? 'Mark open' : task.status === 'in_progress' ? 'Mark done' : 'Mark in progress'}
+                title={task.status === 'done' ? 'Відкрити' : task.status === 'in_progress' ? 'Завершити' : 'Почати'}
               >
-                {task.status === 'done' && <span class="text-[10px] leading-none">✓</span>}
+                {task.status === 'done'        && <span class="text-[10px] leading-none">✓</span>}
                 {task.status === 'in_progress' && <span class="text-[8px] leading-none text-warning">●</span>}
               </button>
             </form>
 
             <!-- Priority dot -->
-            <div class={`w-2 h-2 rounded-full shrink-0 ${priorityDot[task.priority] ?? 'bg-gray-600'}`}></div>
+            <div class={`w-2 h-2 rounded-full shrink-0 mt-2 ${priorityDot[task.priority] ?? 'bg-gray-600'}`}></div>
 
-            <!-- Title + entity -->
+            <!-- Content -->
             <div class="flex-1 min-w-0">
               <p class={`text-sm font-medium ${task.status === 'done' ? 'line-through text-gray-600' : 'text-gray-100'}`}>
                 {task.title}
               </p>
-              {task.entity_name && (
-                <p class="text-xs text-gray-600 mt-0.5 capitalize">
-                  {task.entity_type}: <span class="text-gray-500">{task.entity_name}</span>
-                </p>
-              )}
+              <div class="flex flex-wrap items-center gap-x-3 gap-y-0.5 mt-0.5">
+                {task.entity_name && (
+                  <span class="text-xs text-gray-600 capitalize">
+                    {task.entity_type}: <span class="text-gray-500">{task.entity_name}</span>
+                  </span>
+                )}
+                {task.assigned_to && (
+                  <span class="text-xs text-gray-600">→ {task.assigned_to}</span>
+                )}
+                {task.start_date && (
+                  <span class="text-xs text-gray-700">від {formatDate(task.start_date)}</span>
+                )}
+              </div>
             </div>
-
-            <!-- Assigned to -->
-            {task.assigned_to && (
-              <span class="text-xs text-gray-500 shrink-0 hidden sm:block">{task.assigned_to}</span>
-            )}
 
             <!-- Due date -->
             {task.due_date && (
               <span class={`text-xs font-mono shrink-0 ${overdue ? 'text-danger font-semibold' : 'text-gray-600'}`}>
-                {overdue ? '⚠ ' : ''}{formatDue(task.due_date)}
+                {overdue ? '⚠ ' : 'до '}{formatDate(task.due_date)}
               </span>
             )}
 
             <!-- Priority badge -->
-            <span class={`text-xs px-1.5 py-0.5 rounded border font-medium capitalize shrink-0 hidden md:block ${priorityColor[task.priority] ?? ''}`}>
+            <span class={`text-xs px-1.5 py-0.5 rounded border font-medium capitalize shrink-0 hidden sm:block ${priorityColor[task.priority] ?? ''}`}>
               {task.priority}
             </span>
 
@@ -271,7 +293,7 @@ const tabs = [
             <form method="POST" class="shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
               <input type="hidden" name="_action" value="delete" />
               <input type="hidden" name="task_id" value={task.id} />
-              <button type="submit" onclick="return confirm('Delete this task?')"
+              <button type="submit" onclick="return confirm('Видалити цей таск?')"
                 class="text-gray-700 hover:text-danger transition-colors text-sm px-1">✕</button>
             </form>
           </div>
@@ -286,6 +308,7 @@ const tabs = [
   const operatorsData = JSON.parse(operatorsJson);
   const dealsData     = JSON.parse(dealsJson);
 
+  // Toggle form
   document.getElementById('toggle-form')?.addEventListener('click', () => {
     document.getElementById('task-form')?.classList.toggle('hidden');
   });
@@ -293,19 +316,62 @@ const tabs = [
     document.getElementById('task-form')?.classList.add('hidden');
   });
 
-  const entityTypeSelect = document.getElementById('entity-type-select');
-  const entityIdSelect   = document.getElementById('entity-id-select');
-  const entityWrapper    = document.getElementById('entity-select-wrapper');
+  // Entity type change → show/hide searchable picker
+  const entityTypeSelect  = document.getElementById('entity-type-select');
+  const entityWrapper     = document.getElementById('entity-select-wrapper');
+  const entitySearch      = document.getElementById('entity-search');
+  const entityIdHidden    = document.getElementById('entity-id-hidden');
+  const entityDd          = document.getElementById('entity-dd');
+
+  let currentEntityData = [];
+
+  function renderEntityList(q) {
+    const filtered = q
+      ? currentEntityData.filter(d => d.name.toLowerCase().includes(q.toLowerCase()))
+      : currentEntityData;
+    entityDd.innerHTML = filtered.length
+      ? filtered.map(d => {
+          const name = d.name.replace(/</g, '&lt;');
+          return `<div class="px-3 py-2 text-sm text-gray-200 hover:bg-accent/10 cursor-pointer border-b border-border/40 last:border-0 transition-colors"
+            data-id="${d.id}" data-name="${encodeURIComponent(d.name)}">${name}</div>`;
+        }).join('')
+      : '<div class="px-3 py-2.5 text-xs text-gray-600 italic">No results</div>';
+  }
 
   entityTypeSelect?.addEventListener('change', () => {
     const type = entityTypeSelect.value;
     if (!type) {
       entityWrapper.classList.add('hidden');
+      entityIdHidden.value = '';
       return;
     }
     entityWrapper.classList.remove('hidden');
-    const data = type === 'buyer' ? buyersData : type === 'operator' ? operatorsData : dealsData;
-    entityIdSelect.innerHTML = '<option value="">— Choose —</option>' +
-      data.map(d => `<option value="${d.id}">${d.name}</option>`).join('');
+    currentEntityData = type === 'buyer' ? buyersData : type === 'operator' ? operatorsData : dealsData;
+    if (entitySearch) entitySearch.value = '';
+    if (entityIdHidden) entityIdHidden.value = '';
+    renderEntityList('');
+  });
+
+  entitySearch?.addEventListener('focus', () => {
+    renderEntityList(entitySearch.value);
+    entityDd?.classList.remove('hidden');
+  });
+  entitySearch?.addEventListener('input', () => {
+    entityIdHidden.value = '';
+    renderEntityList(entitySearch.value);
+    entityDd?.classList.remove('hidden');
+  });
+  entityDd?.addEventListener('mousedown', e => {
+    const item = e.target.closest('[data-id]');
+    if (!item) return;
+    e.preventDefault();
+    entityIdHidden.value = item.dataset.id;
+    entitySearch.value = decodeURIComponent(item.dataset.name);
+    entityDd.classList.add('hidden');
+  });
+  document.addEventListener('click', e => {
+    if (!document.getElementById('entity-picker')?.contains(e.target)) {
+      entityDd?.classList.add('hidden');
+    }
   });
 </script>

@@ -37,9 +37,23 @@ if (Astro.request.method === 'POST') {
   }
 
   if (action === 'update_stage') {
-    await supabase.from('projects')
-      .update({ pipeline_stage: form.get('stage') })
-      .eq('id', form.get('deal_id') as string);
+    const dealId   = form.get('deal_id') as string;
+    const newStage = form.get('stage') as string;
+    const { data: dealRow } = await supabase.from('projects').select('name, pipeline_stage').eq('id', dealId).single();
+    await supabase.from('projects').update({ pipeline_stage: newStage }).eq('id', dealId);
+    if (dealRow) {
+      const stageLabels: Record<string, string> = {
+        new: 'Новий', negotiation: 'Переговори', trial: 'Тестовий',
+        active: 'Ретеншин', completed: 'Завершено', no_deal: 'Не домовились',
+      };
+      const from = stageLabels[(dealRow as any).pipeline_stage] ?? (dealRow as any).pipeline_stage;
+      const to   = stageLabels[newStage] ?? newStage;
+      await supabase.from('activity_log').insert({
+        entity_type: 'deal',
+        entity_name: (dealRow as any).name,
+        action: `${from} → ${to}`,
+      });
+    }
   }
 
   if (action === 'update_actuals') {
