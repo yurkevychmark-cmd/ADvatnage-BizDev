@@ -1,0 +1,291 @@
+---
+import Layout from '../../components/Layout.astro';
+import { supabase } from '../../lib/supabase';
+
+const { id } = Astro.params;
+
+// Default columns (used if deal has no custom report_columns set)
+const DEFAULT_COLUMNS = [
+  { key: 'spend',       label: 'Spend ($)',        type: 'number' },
+  { key: 'impressions', label: 'Impressions',      type: 'number' },
+  { key: 'clicks',      label: 'Clicks',           type: 'number' },
+  { key: 'leads',       label: 'Leads',            type: 'number' },
+  { key: 'ftd',         label: 'FTD',              type: 'number' },
+  { key: 'revenue',     label: 'Revenue ($)',      type: 'number' },
+];
+
+// ── POST actions ──────────────────────────────────────────────────────────
+if (Astro.request.method === 'POST') {
+  const form = await Astro.request.formData();
+  const action = form.get('_action') as string;
+
+  if (action === 'add_row') {
+    await supabase.from('report_entries').insert({
+      project_id: id,
+      entry_date: form.get('entry_date') as string,
+      granularity: (form.get('granularity') as string) || 'day',
+      values: {},
+      notes: (form.get('notes') as string) || null,
+    });
+  }
+
+  if (action === 'update_cell') {
+    const rowId   = form.get('row_id') as string;
+    const colKey  = form.get('col_key') as string;
+    const value   = form.get('value') as string;
+    // Fetch current values
+    const { data: row } = await supabase.from('report_entries').select('values').eq('id', rowId).single();
+    const newValues = { ...((row as any)?.values ?? {}), [colKey]: value === '' ? null : Number(value) };
+    await supabase.from('report_entries').update({ values: newValues }).eq('id', rowId);
+  }
+
+  if (action === 'update_notes') {
+    await supabase.from('report_entries').update({ notes: form.get('notes') as string || null }).eq('id', form.get('row_id') as string);
+  }
+
+  if (action === 'delete_row') {
+    await supabase.from('report_entries').delete().eq('id', form.get('row_id') as string);
+  }
+
+  if (action === 'add_column') {
+    const { data: deal } = await supabase.from('projects').select('report_columns').eq('id', id).single();
+    const existing = ((deal as any)?.report_columns ?? DEFAULT_COLUMNS) as any[];
+    const key = (form.get('col_key') as string).trim().toLowerCase().replace(/[^a-z0-9_]/g, '_');
+    if (key && !existing.some(c => c.key === key)) {
+      existing.push({ key, label: (form.get('col_label') as string).trim() || key, type: 'number' });
+      await supabase.from('projects').update({ report_columns: existing }).eq('id', id);
+    }
+  }
+
+  if (action === 'delete_column') {
+    const { data: deal } = await supabase.from('projects').select('report_columns').eq('id', id).single();
+    const existing = ((deal as any)?.report_columns ?? DEFAULT_COLUMNS) as any[];
+    const filtered = existing.filter(c => c.key !== form.get('col_key'));
+    await supabase.from('projects').update({ report_columns: filtered }).eq('id', id);
+  }
+
+  return Astro.redirect(Astro.url.pathname + Astro.url.search);
+}
+
+// ── Data ──────────────────────────────────────────────────────────────────
+const granularity = Astro.url.searchParams.get('g') ?? 'day';
+
+const { data: deal } = await supabase
+  .from('projects')
+  .select('*, buyer:buyers(name), operator:operators(name)')
+  .eq('id', id)
+  .single();
+
+if (!deal) {
+  return Astro.redirect('/deals');
+}
+
+const { data: entries } = await supabase
+  .from('report_entries')
+  .select('*')
+  .eq('project_id', id)
+  .eq('granularity', granularity)
+  .order('entry_date', { ascending: false });
+
+const columns = ((deal as any).report_columns?.length ? (deal as any).report_columns : DEFAULT_COLUMNS) as { key: string; label: string; type: string }[];
+
+// Aggregate totals
+const totals: Record<string, number> = {};
+columns.forEach(c => { totals[c.key] = 0; });
+(entries ?? []).forEach((e: any) => {
+  columns.forEach(c => {
+    const v = Number(e.values?.[c.key] ?? 0);
+    if (!Number.isNaN(v)) totals[c.key] += v;
+  });
+});
+
+const granularityTabs = [
+  { key: 'day',   label: 'День' },
+  { key: 'week',  label: 'Тиждень' },
+  { key: 'month', label: 'Місяць' },
+];
+
+function formatDateInput(d: string): string {
+  // Just return as-is, HTML date input expects YYYY-MM-DD
+  return d;
+}
+function formatDateDisplay(d: string, gran: string): string {
+  const date = new Date(d);
+  if (gran === 'month') {
+    return date.toLocaleDateString('uk-UA', { month: 'long', year: 'numeric' });
+  }
+  if (gran === 'week') {
+    const end = new Date(date); end.setDate(end.getDate() + 6);
+    return `${date.toLocaleDateString('uk-UA', { day: '2-digit', month: '2-digit' })} – ${end.toLocaleDateString('uk-UA', { day: '2-digit', month: '2-digit' })}`;
+  }
+  return date.toLocaleDateString('uk-UA', { day: '2-digit', month: '2-digit', year: 'numeric', weekday: 'short' });
+}
+
+const today = new Date().toISOString().slice(0, 10);
+const dealAny = deal as any;
+---
+
+<Layout title={`Report — ${dealAny.name}`}>
+  <!-- Back + header -->
+  <div class="mb-6">
+    <a href="/deals" class="text-xs text-gray-500 hover:text-accent transition-colors inline-flex items-center gap-1 mb-3">
+      ← Back to Deals
+    </a>
+    <div class="flex items-start justify-between gap-4 flex-wrap">
+      <div>
+        <h1 class="text-2xl font-bold">📊 Daily Reports</h1>
+        <p class="text-gray-500 text-sm mt-1">
+          <span class="font-semibold text-gray-300">{dealAny.buyer?.name ?? '—'}</span>
+          <span class="text-gray-700 mx-1">↔</span>
+          <span class="font-semibold text-gray-300">{dealAny.operator?.name ?? '—'}</span>
+        </p>
+      </div>
+      <button id="toggle-col-form" class="text-xs text-gray-400 hover:text-accent border border-border bg-card-2 px-3 py-1.5 rounded-lg transition-colors">
+        + Add Column
+      </button>
+    </div>
+  </div>
+
+  <!-- Granularity tabs -->
+  <div class="flex gap-1 mb-5 bg-card-2 p-1 rounded-lg w-fit border border-border">
+    {granularityTabs.map(t => (
+      <a href={`/reports/${id}?g=${t.key}`}
+        class={`px-4 py-1.5 rounded-md text-sm font-medium transition-colors ${
+          granularity === t.key ? 'bg-card text-white shadow' : 'text-gray-500 hover:text-gray-300'
+        }`}>
+        {t.label}
+      </a>
+    ))}
+  </div>
+
+  <!-- Add column form (hidden by default) -->
+  <div id="col-form" class="hidden mb-5 bg-card rounded-xl border border-border p-4">
+    <form method="POST" class="flex items-end gap-3">
+      <input type="hidden" name="_action" value="add_column" />
+      <div class="flex-1">
+        <label class="block text-xs text-gray-500 mb-1">Column key (without spaces)</label>
+        <input type="text" name="col_key" required placeholder="cpa, roi, conversions…"
+          class="w-full bg-card-2 border border-border rounded-lg px-3 py-2 text-sm text-gray-200 focus:border-accent outline-none" />
+      </div>
+      <div class="flex-1">
+        <label class="block text-xs text-gray-500 mb-1">Display label</label>
+        <input type="text" name="col_label" placeholder="CPA ($)"
+          class="w-full bg-card-2 border border-border rounded-lg px-3 py-2 text-sm text-gray-200 focus:border-accent outline-none" />
+      </div>
+      <button type="submit" class="bg-accent hover:bg-accent-dark text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors">
+        Add
+      </button>
+    </form>
+  </div>
+
+  <!-- Add row form (always visible at top of table) -->
+  <div class="bg-card rounded-xl border border-border overflow-hidden">
+    <form method="POST" class="flex items-center gap-3 px-5 py-3 border-b border-border bg-card-2/60">
+      <input type="hidden" name="_action" value="add_row" />
+      <input type="hidden" name="granularity" value={granularity} />
+      <span class="text-xs text-gray-500 uppercase tracking-wide font-medium">+ New row:</span>
+      <input type="date" name="entry_date" required value={today}
+        class="bg-card border border-border rounded-lg px-3 py-1.5 text-sm text-gray-200 focus:border-accent outline-none" />
+      <input type="text" name="notes" placeholder="Notes…"
+        class="flex-1 bg-card border border-border rounded-lg px-3 py-1.5 text-sm text-gray-200 placeholder-gray-600 focus:border-accent outline-none" />
+      <button type="submit" class="bg-accent hover:bg-accent-dark text-white text-sm font-medium px-4 py-1.5 rounded-lg transition-colors">
+        Add Row
+      </button>
+    </form>
+
+    <!-- Table -->
+    <div class="overflow-x-auto">
+      <table class="w-full text-sm">
+        <thead>
+          <tr class="border-b border-border bg-card-2/40 text-xs text-gray-500 uppercase tracking-wide">
+            <th class="text-left px-4 py-2.5 font-medium sticky left-0 bg-card-2/40">Date</th>
+            {columns.map(c => (
+              <th class="text-right px-3 py-2.5 font-medium relative group min-w-[120px]">
+                <span>{c.label}</span>
+                <form method="POST" class="inline-block ml-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                  <input type="hidden" name="_action" value="delete_column" />
+                  <input type="hidden" name="col_key" value={c.key} />
+                  <button type="submit" onclick={`return confirm('Remove column ${c.label}? (Data preserved but hidden)')`}
+                    class="text-gray-700 hover:text-danger text-xs">×</button>
+                </form>
+              </th>
+            ))}
+            <th class="text-left px-3 py-2.5 font-medium min-w-[180px]">Notes</th>
+            <th class="w-8"></th>
+          </tr>
+        </thead>
+        <tbody>
+          {(!entries || entries.length === 0) ? (
+            <tr>
+              <td colspan={columns.length + 3} class="text-center text-gray-600 text-sm py-12">
+                No rows yet. Use the "+ New row" form above to add the first entry.
+              </td>
+            </tr>
+          ) : (
+            (entries as any[]).map(entry => (
+              <tr class="border-b border-border/40 hover:bg-card-2/30 transition-colors group">
+                <td class="px-4 py-2 text-gray-300 font-mono text-xs sticky left-0 bg-card group-hover:bg-card-2/30">
+                  {formatDateDisplay(entry.entry_date, granularity)}
+                </td>
+                {columns.map(c => (
+                  <td class="px-3 py-1 text-right">
+                    <form method="POST" class="inline-block w-full">
+                      <input type="hidden" name="_action" value="update_cell" />
+                      <input type="hidden" name="row_id" value={entry.id} />
+                      <input type="hidden" name="col_key" value={c.key} />
+                      <input type="number" step="0.01" name="value" value={entry.values?.[c.key] ?? ''}
+                        onchange="this.form.submit()"
+                        placeholder="—"
+                        class="w-full bg-transparent text-right text-sm text-gray-200 font-mono px-1 py-1 rounded hover:bg-card-2 focus:bg-card-2 focus:outline-none focus:ring-1 focus:ring-accent/40" />
+                    </form>
+                  </td>
+                ))}
+                <td class="px-3 py-1">
+                  <form method="POST" class="inline-block w-full">
+                    <input type="hidden" name="_action" value="update_notes" />
+                    <input type="hidden" name="row_id" value={entry.id} />
+                    <input type="text" name="notes" value={entry.notes ?? ''}
+                      onchange="this.form.submit()"
+                      placeholder="—"
+                      class="w-full bg-transparent text-sm text-gray-300 px-1 py-1 rounded hover:bg-card-2 focus:bg-card-2 focus:outline-none focus:ring-1 focus:ring-accent/40" />
+                  </form>
+                </td>
+                <td class="px-2 py-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                  <form method="POST" class="inline-block">
+                    <input type="hidden" name="_action" value="delete_row" />
+                    <input type="hidden" name="row_id" value={entry.id} />
+                    <button type="submit" onclick="return confirm('Delete this row?')"
+                      class="text-gray-700 hover:text-danger text-sm">✕</button>
+                  </form>
+                </td>
+              </tr>
+            ))
+          )}
+        </tbody>
+        {entries && entries.length > 0 && (
+          <tfoot>
+            <tr class="border-t-2 border-border bg-card-2/40 font-semibold">
+              <td class="px-4 py-2.5 text-xs text-gray-400 uppercase tracking-wide sticky left-0 bg-card-2/40">Total</td>
+              {columns.map(c => (
+                <td class="px-3 py-2.5 text-right font-mono text-gray-200">
+                  {totals[c.key].toLocaleString(undefined, { maximumFractionDigits: 2 })}
+                </td>
+              ))}
+              <td colspan="2"></td>
+            </tr>
+          </tfoot>
+        )}
+      </table>
+    </div>
+  </div>
+
+  <p class="text-xs text-gray-700 mt-3">
+    💡 Tip: click a cell to edit, change auto-saves on blur. Hover columns to remove. Switch granularity at top.
+  </p>
+</Layout>
+
+<script>
+  document.getElementById('toggle-col-form')?.addEventListener('click', () => {
+    document.getElementById('col-form')?.classList.toggle('hidden');
+  });
+</script>

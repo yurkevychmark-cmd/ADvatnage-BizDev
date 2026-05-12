@@ -27,6 +27,7 @@ if (Astro.request.method === 'POST') {
       buyer_fee: Number(form.get('buyer_fee')) || 0,
       side_costs: Number(form.get('side_costs')) || 0,
       accounts_fee_pct: Number(form.get('accounts_fee_pct')) || 0,
+      geos: (form.getAll('geos') as string[]).filter(g => g.trim().length > 0).map(g => g.trim().toUpperCase()),
       notes: (form.get('notes') as string) || null,
       status: 'active',
     });
@@ -65,6 +66,7 @@ if (Astro.request.method === 'POST') {
         buyer_fee: Number(form.get('buyer_fee')) || 0,
         side_costs: Number(form.get('side_costs')) || 0,
         accounts_fee_pct: Number(form.get('accounts_fee_pct')) || 0,
+        geos: (form.getAll('geos') as string[]).filter(g => g.trim().length > 0).map(g => g.trim().toUpperCase()),
         notes: (form.get('notes') as string) || null,
       })
       .eq('id', form.get('deal_id') as string);
@@ -279,18 +281,27 @@ const dealTypeLabel: Record<string, string> = { CPA: 'CPA', RevShare: 'RevShare'
         </div>
       </div>
 
-      <!-- Row 5: Інші витрати + Notes -->
-      <div class="grid grid-cols-2 gap-4 mb-5">
+      <!-- Row 5: Інші витрати + GEO tags -->
+      <div class="grid grid-cols-2 gap-4 mb-4">
         <div>
           <label class="block text-xs text-gray-500 mb-1">Інші витрати ($) <span class="text-gray-700">tools, misc…</span></label>
           <input type="number" name="side_costs" step="0.01" min="0" placeholder="0"
             class="w-full bg-card-2 border border-border rounded-lg px-3 py-2 text-sm text-gray-200 focus:border-accent outline-none" />
         </div>
         <div>
-          <label class="block text-xs text-gray-500 mb-1">Notes</label>
-          <input type="text" name="notes" placeholder="Any extra details…"
-            class="w-full bg-card-2 border border-border rounded-lg px-3 py-2 text-sm text-gray-200 focus:border-accent outline-none" />
+          <label class="block text-xs text-gray-500 mb-1">GEOs <span class="text-gray-700">DE, AU, NZ…</span></label>
+          <div id="geo-list" class="flex flex-wrap items-center gap-1.5 min-h-[38px] bg-card-2 border border-border rounded-lg px-2 py-1.5 focus-within:border-accent">
+            <input type="text" id="geo-input" placeholder="Type code + Enter"
+              class="flex-1 min-w-[100px] bg-transparent text-sm text-gray-200 placeholder-gray-600 outline-none uppercase" />
+          </div>
+          <p class="text-[10px] text-gray-700 mt-1">Введіть код (DE, US, ...) і натисніть Enter</p>
         </div>
+      </div>
+
+      <div class="mb-5">
+        <label class="block text-xs text-gray-500 mb-1">Notes</label>
+        <input type="text" name="notes" placeholder="Any extra details…"
+          class="w-full bg-card-2 border border-border rounded-lg px-3 py-2 text-sm text-gray-200 focus:border-accent outline-none" />
       </div>
 
       <div class="flex gap-3">
@@ -333,6 +344,20 @@ const dealTypeLabel: Record<string, string> = { CPA: 'CPA', RevShare: 'RevShare'
         const dtype = deal.deal_type ?? 'CPA';
         const opValue = dtype === 'CPA' ? deal.cpa_payout : deal.revshare_pct;
         const opValueLabel = dtype === 'CPA' ? `$${opValue}/conv` : `${opValue}%`;
+        const dealGeos: string[] = deal.geos ?? [];
+
+        // Progress bar: stage progression from "Переговори" → "Тестовий" → "Ретеншин" → "Завершено"
+        const progressSteps = [
+          { key: 'negotiation', label: 'Переговори', color: 'bg-yellow-500' },
+          { key: 'trial',       label: 'Тестовий',   color: 'bg-purple-500' },
+          { key: 'active',      label: 'Ретеншин',   color: 'bg-green-500' },
+          { key: 'completed',   label: 'Завершено',  color: 'bg-blue-500' },
+        ];
+        const stageOrder: Record<string, number> = {
+          new: -1, negotiation: 0, trial: 1, active: 2, completed: 3, no_deal: -2,
+        };
+        const currentStep = stageOrder[stage] ?? -1;
+        const isFailed = stage === 'no_deal';
 
         return (
           <div class="deal-card bg-card rounded-xl border border-border hover:border-accent/20 transition-colors" draggable="true" data-id={deal.id}>
@@ -384,6 +409,39 @@ const dealTypeLabel: Record<string, string> = { CPA: 'CPA', RevShare: 'RevShare'
                     </span>
                   )}
                 </div>
+
+                <!-- Progress bar -->
+                {!isFailed ? (
+                  <div class="mt-3">
+                    <div class="flex h-1.5 rounded-full overflow-hidden bg-card-2 gap-0.5">
+                      {progressSteps.map((step, i) => (
+                        <div class={`flex-1 transition-all ${i <= currentStep ? step.color : 'bg-card-2'}`}></div>
+                      ))}
+                    </div>
+                    <div class="flex justify-between mt-1 text-[10px]">
+                      {progressSteps.map((step, i) => (
+                        <span class={`${i === currentStep ? 'text-gray-200 font-semibold' : i < currentStep ? 'text-gray-500' : 'text-gray-700'}`}>
+                          {step.label}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                ) : (
+                  <div class="mt-3 text-xs text-danger flex items-center gap-1.5">
+                    <span class="w-2 h-2 rounded-full bg-danger inline-block"></span>
+                    Не домовились — угода не відбулась
+                  </div>
+                )}
+
+                <!-- GEOs row -->
+                {dealGeos.length > 0 && (
+                  <div class="flex items-center gap-1.5 mt-2.5 flex-wrap">
+                    <span class="text-[10px] text-gray-700 uppercase tracking-wide">GEO:</span>
+                    {dealGeos.map((g: string) => (
+                      <span class="text-[10px] font-mono bg-card-2 border border-border px-1.5 py-0.5 rounded text-gray-400 leading-none">{g}</span>
+                    ))}
+                  </div>
+                )}
               </div>
 
               <!-- Stage change -->
@@ -443,6 +501,14 @@ const dealTypeLabel: Record<string, string> = { CPA: 'CPA', RevShare: 'RevShare'
                   <label class="block text-xs text-gray-500 mb-1">Notes</label>
                   <input type="text" name="notes" value={deal.notes ?? ''}
                     class="w-full bg-card-2 border border-border rounded-lg px-3 py-1.5 text-sm text-gray-200 focus:border-accent outline-none" />
+                </div>
+
+                <!-- GEOs (edit) -->
+                <div class="col-span-2">
+                  <label class="block text-xs text-gray-500 mb-1">GEOs</label>
+                  <div class="geo-list-edit flex flex-wrap items-center gap-1.5 min-h-[36px] bg-card-2 border border-border rounded-lg px-2 py-1 focus-within:border-accent" data-initial={JSON.stringify(dealGeos)}>
+                    <input type="text" class="geo-input-edit flex-1 min-w-[100px] bg-transparent text-sm text-gray-200 placeholder-gray-600 outline-none uppercase" placeholder="Type code + Enter" />
+                  </div>
                 </div>
 
                 <div class="col-span-2 border-t border-border/40 pt-3 mt-1">
@@ -530,6 +596,15 @@ const dealTypeLabel: Record<string, string> = { CPA: 'CPA', RevShare: 'RevShare'
                     )}
                   </div>
                 </div>
+              </div>
+
+              <!-- Reports link -->
+              <div class="mt-4 pt-4 border-t border-border/50">
+                <a href={`/reports/${deal.id}`}
+                  class="inline-flex items-center gap-2 text-sm font-medium bg-accent/15 hover:bg-accent text-accent hover:text-white border border-accent/30 hover:border-accent px-4 py-2 rounded-lg transition-all">
+                  📊 Open Daily Reports
+                </a>
+                <span class="text-xs text-gray-700 ml-3">Excel-style reports per day/week/month</span>
               </div>
             </div>
           </div>
@@ -699,6 +774,59 @@ const dealTypeLabel: Record<string, string> = { CPA: 'CPA', RevShare: 'RevShare'
         if (label) label.textContent = '↑ Upload failed — retry';
       }
     });
+  });
+
+  // ── GEO multi-tag input (create form) ─────────────────────────────────
+  function setupGeoInput(listEl, inputEl, initialTags = []) {
+    function makeChip(code) {
+      const chip = document.createElement('span');
+      chip.className = 'inline-flex items-center gap-1 bg-accent/15 border border-accent/30 text-accent text-xs font-mono px-1.5 py-0.5 rounded';
+      chip.innerHTML = `<span>${code}</span><button type="button" class="hover:text-white text-xs leading-none">×</button>`;
+      chip.querySelector('button').addEventListener('click', () => {
+        chip.previousSibling?.remove?.(); // hidden input
+        chip.remove();
+      });
+      // Hidden input so form submission includes the geo
+      const hidden = document.createElement('input');
+      hidden.type = 'hidden';
+      hidden.name = 'geos';
+      hidden.value = code;
+      listEl.insertBefore(hidden, inputEl);
+      listEl.insertBefore(chip, inputEl);
+    }
+    // Initial
+    initialTags.forEach(t => makeChip(t));
+
+    inputEl.addEventListener('keydown', e => {
+      if (e.key === 'Enter' || e.key === ',' || e.key === ' ') {
+        e.preventDefault();
+        const val = inputEl.value.trim().toUpperCase();
+        if (val && val.length <= 5 && !Array.from(listEl.querySelectorAll('input[name="geos"]')).some(i => i.value === val)) {
+          makeChip(val);
+        }
+        inputEl.value = '';
+      } else if (e.key === 'Backspace' && !inputEl.value) {
+        // remove last chip
+        const chips = listEl.querySelectorAll('span.inline-flex');
+        const lastChip = chips[chips.length - 1];
+        if (lastChip) {
+          lastChip.previousSibling?.remove?.();
+          lastChip.remove();
+        }
+      }
+    });
+  }
+
+  // Create form
+  const createGeoList  = document.getElementById('geo-list');
+  const createGeoInput = document.getElementById('geo-input');
+  if (createGeoList && createGeoInput) setupGeoInput(createGeoList, createGeoInput);
+
+  // Edit forms (per deal)
+  document.querySelectorAll('.geo-list-edit').forEach(listEl => {
+    const inputEl = listEl.querySelector('.geo-input-edit');
+    const initial = JSON.parse(listEl.dataset.initial || '[]');
+    if (inputEl) setupGeoInput(listEl, inputEl, initial);
   });
 
   // ── Drag and drop ─────────────────────────────────────────────────────
