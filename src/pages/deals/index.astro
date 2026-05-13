@@ -344,7 +344,7 @@ const dealTypeLabel: Record<string, string> = { CPA: 'CPA', RevShare: 'RevShare'
         const dtype = deal.deal_type ?? 'CPA';
         const opValue = dtype === 'CPA' ? deal.cpa_payout : deal.revshare_pct;
         const opValueLabel = dtype === 'CPA' ? `$${opValue}/conv` : `${opValue}%`;
-        const dealGeos: string[] = deal.geos ?? [];
+        const dealGeos = (deal.geos ?? []);
 
         // Progress bar: stage progression from "Переговори" → "Тестовий" → "Ретеншин" → "Завершено"
         const progressSteps = [
@@ -353,7 +353,7 @@ const dealTypeLabel: Record<string, string> = { CPA: 'CPA', RevShare: 'RevShare'
           { key: 'active',      label: 'Ретеншин',   color: 'bg-green-500' },
           { key: 'completed',   label: 'Завершено',  color: 'bg-blue-500' },
         ];
-        const stageOrder: Record<string, number> = {
+        const stageOrder = {
           new: -1, negotiation: 0, trial: 1, active: 2, completed: 3, no_deal: -2,
         };
         const currentStep = stageOrder[stage] ?? -1;
