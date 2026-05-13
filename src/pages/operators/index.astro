@@ -20,12 +20,12 @@ function getPrimaryStage(deals: any[]): string | null {
 }
 
 const stageLabel: Record<string, string> = {
-  new: 'Новий',
-  negotiation: 'Переговори',
-  trial: 'Тестовий',
-  active: 'Ретеншин',
-  completed: 'Завершено',
-  no_deal: 'Не домовились',
+  new: 'New',
+  negotiation: 'Negotiation',
+  trial: 'Trial',
+  active: 'Retention',
+  completed: 'Completed',
+  no_deal: 'No Deal',
 };
 
 const stageBorderColor: Record<string, string> = {
@@ -184,7 +184,7 @@ function getDomain(url: string): string {
                 {openTaskCount > 0 && (
                   <a href="/tasks"
                     class="inline-flex items-center gap-1 mt-1.5 text-xs font-semibold px-2 py-0.5 rounded-md border bg-warning/20 text-warning border-warning/40 hover:bg-warning/30 transition-colors"
-                    title={`${openTaskCount} відкритих таск${openTaskCount > 1 ? 'ів' : ''}`}
+                    title={`${openTaskCount} open task${openTaskCount > 1 ? 's' : ''}`}
                     onclick="event.stopPropagation()">
                     📋 {openTaskCount} task{openTaskCount > 1 ? 's' : ''}
                   </a>

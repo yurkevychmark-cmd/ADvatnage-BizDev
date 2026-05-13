@@ -144,12 +144,12 @@ const totalDone = (allTasks ?? []).filter((t: any) => t.status === 'done').lengt
 
       <div class="grid grid-cols-2 gap-3">
         <div>
-          <label class="block text-xs text-gray-500 mb-1">Дата старту</label>
+          <label class="block text-xs text-gray-500 mb-1">Start date</label>
           <input type="date" name="start_date" id="edit-start-date"
             class="w-full bg-card-2 border border-border rounded-lg px-3 py-2 text-sm text-gray-200 focus:border-accent outline-none" />
         </div>
         <div>
-          <label class="block text-xs text-gray-500 mb-1">Дата завершення</label>
+          <label class="block text-xs text-gray-500 mb-1">Due date</label>
           <input type="date" name="due_date" id="edit-due-date"
             class="w-full bg-card-2 border border-border rounded-lg px-3 py-2 text-sm text-gray-200 focus:border-accent outline-none" />
         </div>
@@ -167,7 +167,7 @@ const totalDone = (allTasks ?? []).filter((t: any) => t.status === 'done').lengt
       <form method="POST" id="edit-delete-form">
         <input type="hidden" name="_action" value="delete" />
         <input type="hidden" name="task_id" id="edit-delete-id" />
-        <button type="submit" onclick="return confirm('Видалити цей таск?')"
+        <button type="submit" onclick="return confirm('Delete this task?')"
           class="w-full text-danger hover:bg-danger/10 border border-danger/20 text-sm py-2 rounded-lg transition-colors">
           🗑 Delete Task
         </button>
@@ -190,7 +190,7 @@ const totalDone = (allTasks ?? []).filter((t: any) => t.status === 'done').lengt
 
       <div>
         <label class="block text-xs text-gray-500 mb-1">Title <span class="text-danger">*</span></label>
-        <input type="text" name="title" id="create-title" required placeholder="Опишіть завдання…"
+        <input type="text" name="title" id="create-title" required placeholder="Describe the task…"
           class="w-full bg-card-2 border border-border rounded-lg px-3 py-2 text-sm text-gray-200 placeholder-gray-600 focus:border-accent outline-none" />
       </div>
 
@@ -228,19 +228,19 @@ const totalDone = (allTasks ?? []).filter((t: any) => t.status === 'done').lengt
         </div>
         <div>
           <label class="block text-xs text-gray-500 mb-1">Assigned to</label>
-          <input type="text" name="assigned_to" placeholder="Ім'я…"
+          <input type="text" name="assigned_to" placeholder="Name…"
             class="w-full bg-card-2 border border-border rounded-lg px-3 py-2 text-sm text-gray-200 placeholder-gray-600 focus:border-accent outline-none" />
         </div>
       </div>
 
       <div class="grid grid-cols-2 gap-3">
         <div>
-          <label class="block text-xs text-gray-500 mb-1">Дата старту</label>
+          <label class="block text-xs text-gray-500 mb-1">Start date</label>
           <input type="date" name="start_date"
             class="w-full bg-card-2 border border-border rounded-lg px-3 py-2 text-sm text-gray-200 focus:border-accent outline-none" />
         </div>
         <div>
-          <label class="block text-xs text-gray-500 mb-1">Дата завершення</label>
+          <label class="block text-xs text-gray-500 mb-1">Due date</label>
           <input type="date" name="due_date"
             class="w-full bg-card-2 border border-border rounded-lg px-3 py-2 text-sm text-gray-200 focus:border-accent outline-none" />
         </div>
@@ -257,7 +257,7 @@ const totalDone = (allTasks ?? []).filter((t: any) => t.status === 'done').lengt
 <div class="flex items-center justify-between mb-6">
   <div>
     <h1 class="text-2xl font-bold">Tasks</h1>
-    <p class="text-gray-500 text-sm mt-1">Відкриті завдання та очікування</p>
+    <p class="text-gray-500 text-sm mt-1">Open tasks and follow-ups</p>
   </div>
   <button onclick="openCreatePanel('open')" class="bg-accent hover:bg-accent-dark text-white text-sm font-medium px-5 py-2.5 rounded-lg transition-colors shadow-lg shadow-accent/20">
     + New Task
@@ -267,7 +267,7 @@ const totalDone = (allTasks ?? []).filter((t: any) => t.status === 'done').lengt
 {dbError && (
   <div class="mb-4 bg-danger/10 border border-danger/30 text-danger text-sm rounded-lg px-4 py-3">
     <strong>DB Error:</strong> {dbError}
-    <p class="text-xs mt-1 text-danger/70">Запустіть SQL-міграцію для додавання колонок start_date/due_date.</p>
+    <p class="text-xs mt-1 text-danger/70">Run SQL migration to add start_date/due_date columns.</p>
   </div>
 )}
 
@@ -279,7 +279,7 @@ const totalDone = (allTasks ?? []).filter((t: any) => t.status === 'done').lengt
     <div class="px-4 py-3 border-b border-border bg-card-2/60 flex items-center justify-between">
       <div class="flex items-center gap-2">
         <span class="w-2 h-2 rounded-full bg-blue-400 inline-block"></span>
-        <span class="text-sm font-semibold text-gray-200">Відкриті</span>
+        <span class="text-sm font-semibold text-gray-200">Open</span>
         <span class="text-xs bg-card border border-border text-gray-500 rounded-full px-2 py-0.5 font-mono col-count">{totalOpen}</span>
       </div>
       <button onclick="openCreatePanel('open')" class="text-gray-600 hover:text-accent transition-colors text-xl leading-none font-light" title="Add task">+</button>
@@ -292,7 +292,7 @@ const totalDone = (allTasks ?? []).filter((t: any) => t.status === 'done').lengt
     <div class="px-4 py-3 border-b border-border bg-card-2/60 flex items-center justify-between">
       <div class="flex items-center gap-2">
         <span class="w-2 h-2 rounded-full bg-warning inline-block"></span>
-        <span class="text-sm font-semibold text-gray-200">В процесі</span>
+        <span class="text-sm font-semibold text-gray-200">In Progress</span>
         <span class="text-xs bg-card border border-border text-gray-500 rounded-full px-2 py-0.5 font-mono col-count">{totalWip}</span>
       </div>
       <button onclick="openCreatePanel('in_progress')" class="text-gray-600 hover:text-accent transition-colors text-xl leading-none font-light" title="Add task">+</button>
@@ -305,7 +305,7 @@ const totalDone = (allTasks ?? []).filter((t: any) => t.status === 'done').lengt
     <div class="px-4 py-3 border-b border-border bg-card-2/60 flex items-center justify-between">
       <div class="flex items-center gap-2">
         <span class="w-2 h-2 rounded-full bg-success inline-block"></span>
-        <span class="text-sm font-semibold text-gray-200">Виконані</span>
+        <span class="text-sm font-semibold text-gray-200">Done</span>
         <span class="text-xs bg-card border border-border text-gray-500 rounded-full px-2 py-0.5 font-mono col-count">{totalDone}</span>
       </div>
     </div>
@@ -371,8 +371,8 @@ const totalDone = (allTasks ?? []).filter((t: any) => t.status === 'done').lengt
       ` : ''}
       <div class="flex flex-wrap items-center gap-2 mt-2.5 ml-6">
         ${task.assigned_to ? `<span class="text-[11px] bg-card border border-border text-gray-500 px-1.5 py-0.5 rounded-full">→ ${escHtml(task.assigned_to)}</span>` : ''}
-        ${task.start_date  ? `<span class="text-[11px] text-gray-700">від ${formatDate(task.start_date)}</span>` : ''}
-        ${task.due_date    ? `<span class="text-[11px] font-mono ${overdue ? 'text-danger font-semibold' : 'text-gray-600'}">${overdue ? '⚠ ' : ''}до ${formatDate(task.due_date)}</span>` : ''}
+        ${task.start_date  ? `<span class="text-[11px] text-gray-700">from ${formatDate(task.start_date)}</span>` : ''}
+        ${task.due_date    ? `<span class="text-[11px] font-mono ${overdue ? 'text-danger font-semibold' : 'text-gray-600'}">${overdue ? '⚠ ' : ''}due ${formatDate(task.due_date)}</span>` : ''}
       </div>
       <button class="edit-btn absolute top-2 right-2 opacity-0 group-hover:opacity-100 text-gray-600 hover:text-accent transition-all text-xs px-1.5 py-0.5 rounded bg-card border border-border"
         data-id="${task.id}" title="Edit">✎</button>

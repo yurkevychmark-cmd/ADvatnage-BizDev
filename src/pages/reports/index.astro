@@ -18,8 +18,8 @@ const stageBadge: Record<string, string> = {
   no_deal:     'bg-red-500/15 text-red-400 border-red-500/25',
 };
 const stageLabel: Record<string, string> = {
-  new: 'Новий', negotiation: 'Переговори', trial: 'Тестовий',
-  active: 'Ретеншин', completed: 'Завершено', no_deal: 'Не домовились',
+  new: 'New', negotiation: 'Negotiation', trial: 'Trial',
+  active: 'Retention', completed: 'Completed', no_deal: 'No Deal',
 };
 
 function fmtUSD(n: number) {
@@ -35,12 +35,12 @@ function fmtUSD(n: number) {
   <div class="mb-6 flex items-center justify-between gap-4 flex-wrap">
     <div>
       <h1 class="text-2xl font-bold">📊 Reports</h1>
-      <p class="text-gray-500 text-sm mt-1">Оберіть проект для перегляду щоденних звітів</p>
+      <p class="text-gray-500 text-sm mt-1">Select a project to view daily reports</p>
     </div>
     <input
       type="text"
       id="report-search"
-      placeholder="Пошук…"
+      placeholder="Search…"
       class="bg-card border border-border rounded-lg px-3 py-2 text-sm text-gray-200 placeholder-gray-600 focus:border-accent outline-none w-52"
     />
   </div>
@@ -48,7 +48,7 @@ function fmtUSD(n: number) {
   <!-- Stage filter tabs -->
   <div class="flex flex-wrap gap-1.5 mb-5" id="stage-filters">
     <button data-stage="all" class="stage-btn active-stage-btn px-3 py-1.5 rounded-lg text-sm font-medium border transition-colors bg-card text-white border-accent/40 shadow">
-      Всі <span class="text-xs ml-1 text-gray-400">{dealsArr.length}</span>
+      All <span class="text-xs ml-1 text-gray-400">{dealsArr.length}</span>
     </button>
     {(['negotiation','trial','active','completed','new','no_deal'] as const).map(s => {
       const count = dealsArr.filter(d => d.pipeline_stage === s).length;
@@ -64,8 +64,8 @@ function fmtUSD(n: number) {
   <!-- List -->
   {dealsArr.length === 0 ? (
     <div class="bg-card rounded-xl border border-border p-16 text-center">
-      <p class="text-gray-500 mb-2">Немає угод для звітів.</p>
-      <a href="/deals" class="text-accent text-sm hover:underline">Перейти до угод →</a>
+      <p class="text-gray-500 mb-2">No deals yet.</p>
+      <a href="/deals" class="text-accent text-sm hover:underline">Go to Deals →</a>
     </div>
   ) : (
     <div class="space-y-2" id="reports-list">
@@ -125,7 +125,7 @@ function fmtUSD(n: number) {
     </div>
   )}
 
-  <p id="no-results" class="hidden text-center text-gray-600 text-sm py-12">Нічого не знайдено</p>
+  <p id="no-results" class="hidden text-center text-gray-600 text-sm py-12">Nothing found</p>
 </Layout>
 
 <script>

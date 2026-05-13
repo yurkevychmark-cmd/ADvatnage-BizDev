@@ -164,7 +164,7 @@ const inputCls = "w-full bg-card-2 border border-border rounded-lg px-4 py-2 tex
     const v = coopModel.value;
     if (!v) { coopValueGroup.classList.add('hidden'); return; }
     coopValueGroup.classList.remove('hidden');
-    coopValueLabel.textContent = v === 'CPA' ? 'CPA виплата ($)' : 'Значення (%)';
+    coopValueLabel.textContent = v === 'CPA' ? 'CPA payout ($)' : 'Value (%)';
   }
   coopModel.addEventListener('change', updateCoopValue);
   updateCoopValue();

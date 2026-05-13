@@ -117,7 +117,7 @@ const inputCls = "w-full bg-card-2 border border-border rounded-lg px-4 py-2 tex
       </div>
       <div id="coop-value-group" class={!b.compensation_model ? 'hidden' : ''}>
         <label class="block text-sm text-gray-400 mb-1" id="coop-value-label">
-          {b.compensation_model === 'CPA' ? 'CPA виплата ($)' : 'Значення (%)'}
+          {b.compensation_model === 'CPA' ? 'CPA payout ($)' : 'Value (%)'}
         </label>
         <input type="number" name="cooperation_model_value" id="coop_model_value" step="0.01" min="0"
           value={b.cooperation_model_value ?? ''} placeholder="5" class={inputCls} />
@@ -177,7 +177,7 @@ const inputCls = "w-full bg-card-2 border border-border rounded-lg px-4 py-2 tex
     const v = coopModel.value;
     if (!v) { coopValueGroup.classList.add('hidden'); return; }
     coopValueGroup.classList.remove('hidden');
-    coopValueLabel.textContent = v === 'CPA' ? 'CPA виплата ($)' : 'Значення (%)';
+    coopValueLabel.textContent = v === 'CPA' ? 'CPA payout ($)' : 'Value (%)';
   }
   coopModel.addEventListener('change', updateCoopValue);
 

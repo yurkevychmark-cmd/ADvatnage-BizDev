@@ -35,19 +35,19 @@ const { title } = Astro.props;
     <main class="flex-1 mt-14 md:mt-0 md:ml-60 p-4 md:p-8 min-h-screen max-w-full overflow-x-hidden">
       <!-- Browser history navigation (top-right corner, unobtrusive) -->
       <div class="fixed top-2 right-3 z-40 md:top-3 md:right-4 flex items-center gap-1 md:hidden">
-        <button onclick="history.back()" title="Назад" class="w-8 h-8 flex items-center justify-center text-gray-600 hover:text-gray-300 hover:bg-white/5 rounded-lg transition-colors">
+        <button onclick="history.back()" title="Back" class="w-8 h-8 flex items-center justify-center text-gray-600 hover:text-gray-300 hover:bg-white/5 rounded-lg transition-colors">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="15 18 9 12 15 6"/></svg>
         </button>
-        <button onclick="history.forward()" title="Вперед" class="w-8 h-8 flex items-center justify-center text-gray-600 hover:text-gray-300 hover:bg-white/5 rounded-lg transition-colors">
+        <button onclick="history.forward()" title="Forward" class="w-8 h-8 flex items-center justify-center text-gray-600 hover:text-gray-300 hover:bg-white/5 rounded-lg transition-colors">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="9 18 15 12 9 6"/></svg>
         </button>
       </div>
       <!-- Desktop: history nav inline top of content -->
       <div class="hidden md:flex items-center gap-0.5 mb-5 -mt-2">
-        <button onclick="history.back()" title="Назад" class="w-7 h-7 flex items-center justify-center text-gray-700 hover:text-gray-400 hover:bg-white/5 rounded transition-colors">
+        <button onclick="history.back()" title="Back" class="w-7 h-7 flex items-center justify-center text-gray-700 hover:text-gray-400 hover:bg-white/5 rounded transition-colors">
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="15 18 9 12 15 6"/></svg>
         </button>
-        <button onclick="history.forward()" title="Вперед" class="w-7 h-7 flex items-center justify-center text-gray-700 hover:text-gray-400 hover:bg-white/5 rounded transition-colors">
+        <button onclick="history.forward()" title="Forward" class="w-7 h-7 flex items-center justify-center text-gray-700 hover:text-gray-400 hover:bg-white/5 rounded transition-colors">
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="9 18 15 12 9 6"/></svg>
         </button>
       </div>
