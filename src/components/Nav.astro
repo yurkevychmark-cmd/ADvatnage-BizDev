@@ -6,12 +6,13 @@ interface Props {
 const { currentPath } = Astro.props;
 
 const links = [
-  { href: '/', label: 'Dashboard', icon: '◫' },
-  { href: '/buyers', label: 'Buyers', icon: '⊕' },
+  { href: '/',          label: 'Dashboard', icon: '◫' },
   { href: '/operators', label: 'Operators', icon: '⊛' },
-  { href: '/deals', label: 'Deals', icon: '⇋' },
-  { href: '/tasks', label: 'Tasks', icon: '✓' },
-  { href: '/log', label: 'Journal', icon: '◷' },
+  { href: '/deals',     label: 'Deals',     icon: '⇋' },
+  { href: '/tasks',     label: 'Tasks',     icon: '✓' },
+  { href: '/buyers',    label: 'Buyers',    icon: '⊕' },
+  { href: '/reports',   label: 'Reports',   icon: '📊' },
+  { href: '/log',       label: 'Journey',   icon: '◷' },
 ];
 
 function isActive(href: string): boolean {

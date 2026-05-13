@@ -33,6 +33,29 @@ const { title } = Astro.props;
     <Nav currentPath={Astro.url.pathname} />
     <!-- mt-14 = mobile top bar height; md:mt-0 + md:ml-60 = desktop sidebar -->
     <main class="flex-1 mt-14 md:mt-0 md:ml-60 p-4 md:p-8 min-h-screen max-w-full overflow-x-hidden">
+      <!-- Back / Forward navigation bar -->
+      <div class="flex items-center gap-1 mb-5 -mt-1">
+        <button
+          onclick="history.back()"
+          class="flex items-center gap-1.5 text-xs text-gray-600 hover:text-gray-300 bg-card border border-border hover:border-border/80 px-2.5 py-1.5 rounded-lg transition-colors"
+          title="Назад"
+        >
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="15 18 9 12 15 6"/>
+          </svg>
+          Back
+        </button>
+        <button
+          onclick="history.forward()"
+          class="flex items-center gap-1.5 text-xs text-gray-600 hover:text-gray-300 bg-card border border-border hover:border-border/80 px-2.5 py-1.5 rounded-lg transition-colors"
+          title="Вперед"
+        >
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="9 18 15 12 9 6"/>
+          </svg>
+          Forward
+        </button>
+      </div>
       <slot />
     </main>
     <!-- Global: copy-to-clipboard toast -->
