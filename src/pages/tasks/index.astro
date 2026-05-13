@@ -544,18 +544,19 @@ const totalDone = (allTasks ?? []).filter((t: any) => t.status === 'done').lengt
     const hiddenEl = document.getElementById(`${prefix}-entity-id`);
     if (!searchEl || !ddEl) return;
 
-    function render(q) {
-      const filtered = q ? data.filter(d => d.name.toLowerCase().includes(q.toLowerCase())) : data;
-      ddEl.innerHTML = filtered.length
-        ? filtered.map(d => `<div class="px-3 py-2 text-sm text-gray-200 hover:bg-accent/10 cursor-pointer border-b border-border/40 last:border-0" data-id="${d.id}" data-name="${encodeURIComponent(d.name)}">${d.name}</div>`).join('')
-        : '<div class="px-3 py-2.5 text-xs text-gray-600 italic">No results</div>';
-    }
-
-    // Remove old listeners by cloning
+    // Remove old listeners by cloning — must clone BEFORE defining render so render closes over newDd
     const newSearch = searchEl.cloneNode(true);
     searchEl.parentNode.replaceChild(newSearch, searchEl);
     const newDd = ddEl.cloneNode(false);
     ddEl.parentNode.replaceChild(newDd, ddEl);
+
+    // render must reference newDd (the live DOM element), not the old ddEl
+    function render(q) {
+      const filtered = q ? data.filter(d => d.name.toLowerCase().includes(q.toLowerCase())) : data;
+      newDd.innerHTML = filtered.length
+        ? filtered.map(d => `<div class="px-3 py-2 text-sm text-gray-200 hover:bg-accent/10 cursor-pointer border-b border-border/40 last:border-0" data-id="${d.id}" data-name="${encodeURIComponent(d.name)}">${d.name}</div>`).join('')
+        : '<div class="px-3 py-2.5 text-xs text-gray-600 italic">No results</div>';
+    }
 
     newSearch.addEventListener('focus', () => { render(newSearch.value); newDd.classList.remove('hidden'); });
     newSearch.addEventListener('input', () => { hiddenEl.value = ''; render(newSearch.value); newDd.classList.remove('hidden'); });

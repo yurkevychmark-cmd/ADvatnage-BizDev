@@ -58,16 +58,21 @@ if (Astro.request.method === 'POST') {
   }
 
   if (action === 'update_actuals') {
+    const editDealType = (form.get('deal_type') as string) || 'CPA';
+    const editOpValue  = Number(form.get('op_value')) || 0;
     await supabase.from('projects')
       .update({
-        actual_spend: Number(form.get('actual_spend')) || null,
+        deal_type:          editDealType,
+        cpa_payout:         editDealType === 'CPA' ? editOpValue : 0,
+        revshare_pct:       editDealType !== 'CPA' ? editOpValue : 0,
+        actual_spend:       Number(form.get('actual_spend')) || null,
         actual_conversions: Number(form.get('actual_conversions')) || null,
-        actual_revenue: Number(form.get('actual_revenue')) || null,
-        buyer_fee: Number(form.get('buyer_fee')) || 0,
-        side_costs: Number(form.get('side_costs')) || 0,
-        accounts_fee_pct: Number(form.get('accounts_fee_pct')) || 0,
-        geos: (form.getAll('geos') as string[]).filter(g => g.trim().length > 0).map(g => g.trim().toUpperCase()),
-        notes: (form.get('notes') as string) || null,
+        actual_revenue:     Number(form.get('actual_revenue')) || null,
+        buyer_fee:          Number(form.get('buyer_fee')) || 0,
+        side_costs:         Number(form.get('side_costs')) || 0,
+        accounts_fee_pct:   Number(form.get('accounts_fee_pct')) || 0,
+        geos:               (form.getAll('geos') as string[]).filter(g => g.trim().length > 0).map(g => g.trim().toUpperCase()),
+        notes:              (form.get('notes') as string) || null,
       })
       .eq('id', form.get('deal_id') as string);
   }
@@ -477,7 +482,27 @@ const dealTypeLabel: Record<string, string> = { CPA: 'CPA', RevShare: 'RevShare'
                 <input type="hidden" name="_action" value="update_actuals" />
                 <input type="hidden" name="deal_id" value={deal.id} />
 
-                <div class="col-span-2">
+                <!-- Deal model (editable) -->
+                <div class="col-span-2 mb-1">
+                  <p class="text-xs text-gray-500 uppercase tracking-wide mb-3">Deal Model</p>
+                </div>
+                <div>
+                  <label class="block text-xs text-gray-500 mb-1">Deal Type</label>
+                  <select name="deal_type" class={`edit-deal-type-select w-full bg-card-2 border border-border rounded-lg px-3 py-1.5 text-sm text-gray-200 focus:border-accent outline-none`} data-current={dtype}>
+                    <option value="CPA"      selected={dtype === 'CPA'}>CPA (per conversion)</option>
+                    <option value="RevShare" selected={dtype === 'RevShare'}>RevShare (% of revenue)</option>
+                    <option value="Spend"    selected={dtype === 'Spend'}>% of Spend</option>
+                  </select>
+                </div>
+                <div>
+                  <label class="block text-xs text-gray-500 mb-1 edit-op-value-label">
+                    {dtype === 'CPA' ? 'CPA Value ($)' : dtype === 'RevShare' ? 'RevShare %' : 'Spend %'}
+                  </label>
+                  <input type="number" name="op_value" step="0.01" min="0" value={opValue ?? ''}
+                    class="w-full bg-card-2 border border-border rounded-lg px-3 py-1.5 text-sm text-gray-200 focus:border-accent outline-none" />
+                </div>
+
+                <div class="col-span-2 border-t border-border/40 pt-3">
                   <p class="text-xs text-gray-500 uppercase tracking-wide mb-3">Actual Results</p>
                 </div>
                 <div>
