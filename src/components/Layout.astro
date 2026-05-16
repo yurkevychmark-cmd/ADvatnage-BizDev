@@ -23,7 +23,7 @@ const { title } = Astro.props;
           radial-gradient(ellipse 60% 40% at 80% 110%, rgba(225,29,72,0.05) 0%, transparent 60%);
         background-attachment: fixed;
       }
-      ::-webkit-scrollbar { width: 6px; }
+      ::-webkit-scrollbar { width: 6px; height: 6px; }
       ::-webkit-scrollbar-track { background: #0d1117; }
       ::-webkit-scrollbar-thumb { background: #1a2235; border-radius: 3px; }
       ::-webkit-scrollbar-thumb:hover { background: #e11d48; }
@@ -31,34 +31,93 @@ const { title } = Astro.props;
   </head>
   <body class="text-gray-100 min-h-screen flex">
     <Nav currentPath={Astro.url.pathname} />
-    <!-- mt-14 = mobile top bar height; md:mt-0 + md:ml-60 = desktop sidebar -->
     <main class="flex-1 mt-14 md:mt-0 md:ml-60 p-4 md:p-8 min-h-screen max-w-full overflow-x-hidden">
-      <!-- Browser history navigation (top-right corner, unobtrusive) -->
-      <div class="fixed top-2 right-3 z-40 md:top-3 md:right-4 flex items-center gap-1 md:hidden">
-        <button onclick="history.back()" title="Back" class="w-8 h-8 flex items-center justify-center text-gray-600 hover:text-gray-300 hover:bg-white/5 rounded-lg transition-colors">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="15 18 9 12 15 6"/></svg>
-        </button>
-        <button onclick="history.forward()" title="Forward" class="w-8 h-8 flex items-center justify-center text-gray-600 hover:text-gray-300 hover:bg-white/5 rounded-lg transition-colors">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="9 18 15 12 9 6"/></svg>
-        </button>
-      </div>
-      <!-- Desktop: history nav inline top of content -->
+      <!-- Desktop: subtle back/forward arrows -->
       <div class="hidden md:flex items-center gap-0.5 mb-5 -mt-2">
-        <button onclick="history.back()" title="Back" class="w-7 h-7 flex items-center justify-center text-gray-700 hover:text-gray-400 hover:bg-white/5 rounded transition-colors">
+        <button id="hist-back" title="Back" class="w-7 h-7 flex items-center justify-center text-gray-700 hover:text-gray-400 hover:bg-white/5 rounded transition-colors">
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="15 18 9 12 15 6"/></svg>
         </button>
-        <button onclick="history.forward()" title="Forward" class="w-7 h-7 flex items-center justify-center text-gray-700 hover:text-gray-400 hover:bg-white/5 rounded transition-colors">
+        <button id="hist-fwd" title="Forward" class="w-7 h-7 flex items-center justify-center text-gray-700 hover:text-gray-400 hover:bg-white/5 rounded transition-colors">
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="9 18 15 12 9 6"/></svg>
+        </button>
+      </div>
+      <!-- Mobile: top-right corner arrows -->
+      <div class="fixed top-2 right-3 z-40 md:hidden flex items-center gap-1">
+        <button id="hist-back-m" title="Back" class="w-8 h-8 flex items-center justify-center text-gray-600 hover:text-gray-300 hover:bg-white/5 rounded-lg transition-colors">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="15 18 9 12 15 6"/></svg>
+        </button>
+        <button id="hist-fwd-m" title="Forward" class="w-8 h-8 flex items-center justify-center text-gray-600 hover:text-gray-300 hover:bg-white/5 rounded-lg transition-colors">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="9 18 15 12 9 6"/></svg>
         </button>
       </div>
       <slot />
     </main>
-    <!-- Global: copy-to-clipboard toast -->
+
+    <!-- Nav toast (back/forward) -->
+    <div id="nav-toast" class="fixed bottom-20 left-1/2 -translate-x-1/2 z-[1000] pointer-events-none opacity-0 transition-all duration-300 translate-y-2">
+      <div class="flex items-center gap-2.5 bg-gray-900 border border-gray-700 text-gray-200 text-sm px-4 py-2.5 rounded-xl shadow-2xl backdrop-blur-sm">
+        <span id="nav-toast-icon" class="text-base">←</span>
+        <span id="nav-toast-text">Going back…</span>
+      </div>
+    </div>
+    <!-- Copy toast -->
     <div id="copy-toast" class="fixed bottom-5 right-5 bg-card border border-border text-gray-200 text-sm px-4 py-2.5 rounded-lg shadow-xl z-[999] opacity-0 pointer-events-none transition-opacity duration-200"></div>
   </body>
 </html>
+
 <script>
-  window.copyText = async (text: string) => {
+  // ── History navigation with toast ──────────────────────────────────────
+  const navToast   = document.getElementById('nav-toast')!;
+  const navIcon    = document.getElementById('nav-toast-icon')!;
+  const navText    = document.getElementById('nav-toast-text')!;
+  let navTimer: ReturnType<typeof setTimeout>;
+
+  const PAGE_NAMES: Record<string, string> = {
+    '/':          'Dashboard',
+    '/deals':     'Deals',
+    '/buyers':    'Buyers',
+    '/operators': 'Operators',
+    '/tasks':     'Tasks',
+    '/reports':   'Reports',
+    '/log':       'Journey',
+  };
+
+  function pageName(href: string): string {
+    const path = new URL(href, location.origin).pathname;
+    for (const [k, v] of Object.entries(PAGE_NAMES)) {
+      if (path === k || path.startsWith(k + '/')) return v;
+    }
+    return document.title.split(' |')[0];
+  }
+
+  function showNavToast(icon: string, msg: string) {
+    navIcon.textContent = icon;
+    navText.textContent = msg;
+    navToast.style.opacity = '1';
+    navToast.style.transform = 'translateX(-50%) translateY(0)';
+    clearTimeout(navTimer);
+    navTimer = setTimeout(() => {
+      navToast.style.opacity = '0';
+      navToast.style.transform = 'translateX(-50%) translateY(8px)';
+    }, 1800);
+  }
+
+  function doBack() {
+    showNavToast('←', `Back from ${pageName(location.href)}`);
+    setTimeout(() => history.back(), 80);
+  }
+  function doFwd() {
+    showNavToast('→', `Forward from ${pageName(location.href)}`);
+    setTimeout(() => history.forward(), 80);
+  }
+
+  document.getElementById('hist-back')  ?.addEventListener('click', doBack);
+  document.getElementById('hist-fwd')   ?.addEventListener('click', doFwd);
+  document.getElementById('hist-back-m')?.addEventListener('click', doBack);
+  document.getElementById('hist-fwd-m') ?.addEventListener('click', doFwd);
+
+  // ── Copy toast ──────────────────────────────────────────────────────────
+  (window as any).copyText = async (text: string) => {
     try {
       await navigator.clipboard.writeText(text);
       const toast = document.getElementById('copy-toast')!;

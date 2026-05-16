@@ -5,17 +5,65 @@ import { supabase } from '../../lib/supabase';
 const { id } = Astro.params;
 
 const DEFAULT_COLUMNS = [
-  { key: 'spend',       label: 'Spend ($)',   type: 'number' },
-  { key: 'impressions', label: 'Impressions', type: 'number' },
-  { key: 'clicks',      label: 'Clicks',      type: 'number' },
-  { key: 'leads',       label: 'Leads',       type: 'number' },
-  { key: 'ftd',         label: 'FTD',         type: 'number' },
-  { key: 'revenue',     label: 'Revenue ($)', type: 'number' },
+  { key: 'spend',       label: 'Spend',       type: 'currency' },
+  { key: 'impressions', label: 'Impressions', type: 'number'   },
+  { key: 'clicks',      label: 'Clicks',      type: 'number'   },
+  { key: 'leads',       label: 'Leads',       type: 'number'   },
+  { key: 'ftd',         label: 'FTD',         type: 'number'   },
+  { key: 'revenue',     label: 'Revenue',     type: 'currency' },
 ];
 
-// ── POST actions ────────────────────────────────────────────────────────────
+const PRESETS: Record<string, { label: string; cols: { key: string; label: string; type: string }[] }> = {
+  standard: {
+    label: 'Standard',
+    cols: [
+      { key: 'spend',       label: 'Spend',       type: 'currency' },
+      { key: 'impressions', label: 'Impressions', type: 'number'   },
+      { key: 'clicks',      label: 'Clicks',      type: 'number'   },
+      { key: 'leads',       label: 'Leads',       type: 'number'   },
+      { key: 'ftd',         label: 'FTD',         type: 'number'   },
+      { key: 'revenue',     label: 'Revenue',     type: 'currency' },
+    ],
+  },
+  performance: {
+    label: 'Performance',
+    cols: [
+      { key: 'spend',       label: 'Spend',       type: 'currency' },
+      { key: 'clicks',      label: 'Clicks',      type: 'number'   },
+      { key: 'ctr',         label: 'CTR (%)',      type: 'number'   },
+      { key: 'leads',       label: 'Leads',       type: 'number'   },
+      { key: 'cpl',         label: 'CPL',         type: 'currency' },
+      { key: 'ftd',         label: 'FTD',         type: 'number'   },
+      { key: 'cpa',         label: 'CPA',         type: 'currency' },
+    ],
+  },
+  finance: {
+    label: 'Finance',
+    cols: [
+      { key: 'spend',    label: 'Spend',    type: 'currency' },
+      { key: 'revenue',  label: 'Revenue',  type: 'currency' },
+      { key: 'profit',   label: 'Profit',   type: 'currency' },
+      { key: 'roi',      label: 'ROI (%)',  type: 'number'   },
+      { key: 'roas',     label: 'ROAS',     type: 'number'   },
+    ],
+  },
+  media: {
+    label: 'Media',
+    cols: [
+      { key: 'impressions', label: 'Impressions', type: 'number'   },
+      { key: 'reach',       label: 'Reach',       type: 'number'   },
+      { key: 'clicks',      label: 'Clicks',      type: 'number'   },
+      { key: 'ctr',         label: 'CTR (%)',      type: 'number'   },
+      { key: 'spend',       label: 'Spend',       type: 'currency' },
+      { key: 'cpm',         label: 'CPM',         type: 'currency' },
+      { key: 'cpc',         label: 'CPC',         type: 'currency' },
+    ],
+  },
+};
+
+// ── POST actions ─────────────────────────────────────────────────────────────
 if (Astro.request.method === 'POST') {
-  const form = await Astro.request.formData();
+  const form   = await Astro.request.formData();
   const action = form.get('_action') as string;
 
   if (action === 'add_row') {
@@ -50,9 +98,10 @@ if (Astro.request.method === 'POST') {
   if (action === 'add_column') {
     const { data: deal } = await supabase.from('projects').select('report_columns').eq('id', id).single();
     const existing = ((deal as any)?.report_columns ?? DEFAULT_COLUMNS) as any[];
-    const key = (form.get('col_key') as string).trim().toLowerCase().replace(/[^a-z0-9_]/g, '_');
+    const key  = (form.get('col_key') as string).trim().toLowerCase().replace(/[^a-z0-9_]/g, '_');
+    const type = (form.get('col_type') as string) || 'number';
     if (key && !existing.some(c => c.key === key)) {
-      existing.push({ key, label: (form.get('col_label') as string).trim() || key, type: 'number' });
+      existing.push({ key, label: (form.get('col_label') as string).trim() || key, type });
       await supabase.from('projects').update({ report_columns: existing }).eq('id', id);
     }
   }
@@ -60,10 +109,18 @@ if (Astro.request.method === 'POST') {
   if (action === 'rename_column') {
     const { data: deal } = await supabase.from('projects').select('report_columns').eq('id', id).single();
     const existing = ((deal as any)?.report_columns ?? DEFAULT_COLUMNS) as any[];
-    const colKey = form.get('col_key') as string;
+    const colKey   = form.get('col_key') as string;
     const newLabel = (form.get('col_label') as string).trim();
-    const updated = existing.map(c => c.key === colKey ? { ...c, label: newLabel || c.label } : c);
+    const updated  = existing.map(c => c.key === colKey ? { ...c, label: newLabel || c.label } : c);
     await supabase.from('projects').update({ report_columns: updated }).eq('id', id);
+  }
+
+  if (action === 'reorder_columns') {
+    const { data: deal } = await supabase.from('projects').select('report_columns').eq('id', id).single();
+    const existing = ((deal as any)?.report_columns ?? DEFAULT_COLUMNS) as any[];
+    const newOrder = JSON.parse(form.get('order') as string) as string[];
+    const reordered = newOrder.map(k => existing.find(c => c.key === k)).filter(Boolean);
+    await supabase.from('projects').update({ report_columns: reordered }).eq('id', id);
   }
 
   if (action === 'delete_column') {
@@ -73,18 +130,26 @@ if (Astro.request.method === 'POST') {
     await supabase.from('projects').update({ report_columns: filtered }).eq('id', id);
   }
 
+  if (action === 'apply_preset') {
+    const presetKey = form.get('preset') as string;
+    const preset = PRESETS[presetKey];
+    if (preset) {
+      await supabase.from('projects').update({ report_columns: preset.cols }).eq('id', id);
+    }
+  }
+
   return Astro.redirect(Astro.url.pathname + Astro.url.search);
 }
 
-// ── Data ─────────────────────────────────────────────────────────────────────
-const granularity = Astro.url.searchParams.get('g') ?? 'day';
+// ── Data ──────────────────────────────────────────────────────────────────────
+const granularity = Astro.url.searchParams.get('g')    ?? 'day';
 const dateFrom    = Astro.url.searchParams.get('from') ?? '';
 const dateTo      = Astro.url.searchParams.get('to')   ?? '';
 
 const { data: deal } = await supabase
   .from('projects')
   .select('*, buyer:buyers(name), operator:operators(name)')
-  .eq('id', id)
+  .eq('id', id!)
   .single();
 
 if (!deal) return Astro.redirect('/reports');
@@ -95,10 +160,8 @@ let q = supabase
   .eq('project_id', id)
   .eq('granularity', granularity)
   .order('entry_date', { ascending: true });
-
 if (dateFrom) q = q.gte('entry_date', dateFrom);
 if (dateTo)   q = q.lte('entry_date', dateTo);
-
 const { data: entries } = await q;
 
 const columns = ((deal as any).report_columns?.length
@@ -115,9 +178,6 @@ columns.forEach(c => { totals[c.key] = 0; });
   });
 });
 
-const today = new Date().toISOString().slice(0, 10);
-const dealAny = deal as any;
-
 function formatDateDisplay(d: string, gran: string): string {
   const date = new Date(d + 'T00:00:00');
   if (gran === 'month') return date.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
@@ -128,395 +188,533 @@ function formatDateDisplay(d: string, gran: string): string {
   return date.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
 }
 
-// Chart data — pass all entries + column keys to client
-const entriesJson  = JSON.stringify((entries ?? []).map((e: any) => ({
-  date: e.entry_date,
-  values: e.values ?? {},
-})));
-const columnsJson  = JSON.stringify(columns);
-const totalsJson   = JSON.stringify(totals);
-const granStr      = granularity;
-const dealIdStr    = id as string;
-const buyerName    = dealAny.buyer?.name ?? '—';
-const operatorName = dealAny.operator?.name ?? '—';
+function fmtCell(val: any, type: string): string {
+  if (val == null || val === '') return '—';
+  const n = Number(val);
+  if (Number.isNaN(n)) return String(val);
+  if (type === 'currency') return '$' + n.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 2 });
+  return n.toLocaleString(undefined, { maximumFractionDigits: 2 });
+}
 
-// Reversed entries for table (newest first)
+const today       = new Date().toISOString().slice(0, 10);
+const dealAny     = deal as any;
+const buyerName   = dealAny.buyer?.name   ?? '—';
+const opName      = dealAny.operator?.name ?? '—';
+
+// Data for client scripts
+const entriesJson = JSON.stringify((entries ?? []).map((e: any) => ({ id: e.id, date: e.entry_date, values: e.values ?? {}, notes: e.notes ?? '' })));
+const columnsJson = JSON.stringify(columns);
+const totalsJson  = JSON.stringify(totals);
+const presetsJson = JSON.stringify(Object.entries(PRESETS).map(([k, v]) => ({ key: k, label: v.label })));
 const entriesDesc = [...(entries ?? [])].reverse();
+
+// Chart COLORS per column index
+const CHART_COLORS = ['#e11d48','#3b82f6','#10b981','#f59e0b','#8b5cf6','#06b6d4','#f97316','#ec4899'];
 ---
 
-<Layout title={`Report — ${buyerName} ↔ ${operatorName}`}>
+<Layout title={`Report — ${buyerName} ↔ ${opName}`}>
 
-  <!-- ── Header ─────────────────────────────────────────────────────────── -->
-  <div class="flex items-start justify-between gap-4 flex-wrap mb-5">
-    <div>
-      <div class="flex items-center gap-2 text-xs text-gray-600 mb-2">
-        <a href="/reports" class="hover:text-accent transition-colors">Reports</a>
-        <span>/</span>
-        <span class="text-gray-400">{buyerName} ↔ {operatorName}</span>
-      </div>
-      <h1 class="text-xl font-bold flex items-center gap-2">
-        <span>📊</span>
-        <span>{buyerName}</span>
-        <span class="text-gray-600 font-normal">↔</span>
-        <span>{operatorName}</span>
-      </h1>
+<!-- ── Header ──────────────────────────────────────────────────────────── -->
+<div class="flex items-start justify-between gap-4 flex-wrap mb-4">
+  <div>
+    <div class="flex items-center gap-2 text-xs text-gray-600 mb-1.5">
+      <a href="/reports" class="hover:text-accent transition-colors">Reports</a>
+      <span>/</span>
+      <span class="text-gray-400">{buyerName} ↔ {opName}</span>
     </div>
-    <!-- Export button -->
-    <button id="export-csv" class="flex items-center gap-2 bg-card-2 hover:bg-border border border-border text-gray-300 hover:text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors">
-      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>
+    <h1 class="text-xl font-bold">{buyerName} <span class="text-gray-600 font-normal">↔</span> {opName}</h1>
+  </div>
+  <div class="flex items-center gap-2 flex-wrap">
+    <!-- Preset picker -->
+    <div class="relative">
+      <button id="preset-btn" class="flex items-center gap-1.5 bg-card-2 hover:bg-border border border-border text-gray-400 hover:text-white text-xs px-3 py-2 rounded-lg transition-colors">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+        Preset columns
+      </button>
+      <div id="preset-dd" class="hidden absolute right-0 top-full mt-1 bg-card border border-border rounded-xl shadow-2xl z-50 min-w-[160px] py-1 overflow-hidden">
+        {Object.entries(PRESETS).map(([k, v]) => (
+          <form method="POST">
+            <input type="hidden" name="_action" value="apply_preset" />
+            <input type="hidden" name="preset" value={k} />
+            <button type="submit" class="w-full text-left px-4 py-2 text-sm text-gray-300 hover:bg-accent/10 hover:text-white transition-colors">
+              {v.label}
+            </button>
+          </form>
+        ))}
+      </div>
+    </div>
+    <!-- Export -->
+    <button id="export-csv" class="flex items-center gap-1.5 bg-card-2 hover:bg-border border border-border text-gray-400 hover:text-white text-xs px-3 py-2 rounded-lg transition-colors">
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>
       Export CSV
     </button>
   </div>
+</div>
 
-  <!-- ── Toolbar: granularity + date range ──────────────────────────────── -->
-  <div class="flex flex-wrap items-center gap-3 mb-5">
-    <!-- Granularity -->
-    <div class="flex gap-0.5 bg-card-2 p-1 rounded-lg border border-border">
-      {[['day','Day'],['week','Week'],['month','Month']].map(([key, label]) => (
-        <a href={`/reports/${id}?g=${key}${dateFrom ? '&from='+dateFrom : ''}${dateTo ? '&to='+dateTo : ''}`}
-          class={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${granularity === key ? 'bg-card text-white shadow' : 'text-gray-500 hover:text-gray-300'}`}>
-          {label}
-        </a>
-      ))}
-    </div>
-
-    <!-- Date range -->
-    <form id="date-filter-form" method="GET" class="flex items-center gap-2">
-      <input type="hidden" name="g" value={granularity} />
-      <span class="text-xs text-gray-600">From</span>
-      <input type="date" name="from" value={dateFrom}
-        class="bg-card border border-border rounded-lg px-2.5 py-1.5 text-sm text-gray-200 focus:border-accent outline-none" />
-      <span class="text-xs text-gray-600">to</span>
-      <input type="date" name="to" value={dateTo}
-        class="bg-card border border-border rounded-lg px-2.5 py-1.5 text-sm text-gray-200 focus:border-accent outline-none" />
-      <button type="submit" class="bg-card-2 hover:bg-border border border-border text-gray-400 hover:text-white text-xs px-3 py-1.5 rounded-lg transition-colors">
-        Apply
-      </button>
-      {(dateFrom || dateTo) && (
-        <a href={`/reports/${id}?g=${granularity}`} class="text-xs text-gray-600 hover:text-danger transition-colors">✕ Clear</a>
-      )}
-    </form>
+<!-- ── Controls ──────────────────────────────────────────────────────────── -->
+<div class="flex flex-wrap items-center gap-2 mb-5">
+  <!-- Granularity -->
+  <div class="flex gap-0.5 bg-card-2 p-0.5 rounded-lg border border-border">
+    {[['day','Day'],['week','Week'],['month','Month']].map(([key, label]) => (
+      <a href={`/reports/${id}?g=${key}${dateFrom ? '&from='+dateFrom : ''}${dateTo ? '&to='+dateTo : ''}`}
+        class={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${granularity === key ? 'bg-accent text-white shadow' : 'text-gray-500 hover:text-gray-300'}`}>
+        {label}
+      </a>
+    ))}
   </div>
+  <!-- Date range -->
+  <form id="date-filter-form" method="GET" class="flex items-center gap-1.5 flex-wrap">
+    <input type="hidden" name="g" value={granularity} />
+    <span class="text-xs text-gray-600">From</span>
+    <input type="date" name="from" value={dateFrom}
+      class="bg-card border border-border rounded-lg px-2 py-1.5 text-xs text-gray-200 focus:border-accent outline-none" />
+    <span class="text-xs text-gray-600">to</span>
+    <input type="date" name="to" value={dateTo}
+      class="bg-card border border-border rounded-lg px-2 py-1.5 text-xs text-gray-200 focus:border-accent outline-none" />
+    {(dateFrom || dateTo) && (
+      <a href={`/reports/${id}?g=${granularity}`} class="text-xs text-gray-600 hover:text-danger">✕</a>
+    )}
+  </form>
+</div>
 
-  <!-- ── Mini chart ────────────────────────────────────────────────────── -->
-  {(entries?.length ?? 0) > 1 && (
-    <div class="bg-card rounded-xl border border-border p-4 mb-5">
-      <div class="flex items-center justify-between mb-3 gap-3 flex-wrap">
-        <p class="text-xs text-gray-500 uppercase tracking-wide font-medium">Trend</p>
-        <div class="flex items-center gap-2">
-          <span class="text-xs text-gray-600">Column:</span>
-          <select id="chart-col-select" class="bg-card-2 border border-border rounded px-2 py-1 text-xs text-gray-200 focus:border-accent outline-none">
-            {columns.map(c => <option value={c.key}>{c.label}</option>)}
-          </select>
-        </div>
-      </div>
-      <div id="chart-container" class="h-24 relative">
-        <svg id="chart-svg" class="w-full h-full" preserveAspectRatio="none"></svg>
-        <div id="chart-labels" class="absolute bottom-0 left-0 right-0 flex justify-between px-1 text-[9px] text-gray-700 pointer-events-none"></div>
-      </div>
+<!-- ── CHART ──────────────────────────────────────────────────────────────── -->
+<div class="bg-card rounded-xl border border-border p-5 mb-5">
+  <div class="flex items-center justify-between mb-3 flex-wrap gap-2">
+    <p class="text-xs text-gray-500 uppercase tracking-wide font-medium">Performance Chart</p>
+    <!-- Column checkboxes rendered by JS -->
+    <div id="chart-legend" class="flex flex-wrap gap-3"></div>
+  </div>
+  <!-- Y-axis + chart area -->
+  <div class="flex gap-2">
+    <div id="chart-yaxis" class="flex flex-col justify-between text-[9px] text-gray-700 text-right w-8 py-1 shrink-0"></div>
+    <div class="flex-1 relative" style="height:120px">
+      <svg id="chart-svg" class="w-full h-full" viewBox="0 0 1000 120" preserveAspectRatio="none">
+        <!-- Grid lines -->
+        <line x1="0" y1="30"  x2="1000" y2="30"  stroke="#1a2235" stroke-width="0.5"/>
+        <line x1="0" y1="60"  x2="1000" y2="60"  stroke="#1a2235" stroke-width="0.5"/>
+        <line x1="0" y1="90"  x2="1000" y2="90"  stroke="#1a2235" stroke-width="0.5"/>
+        <line x1="0" y1="115" x2="1000" y2="115" stroke="#1a2235" stroke-width="1"/>
+      </svg>
+      <!-- X-axis labels -->
+      <div id="chart-xaxis" class="absolute bottom-0 left-0 right-0 flex justify-between text-[9px] text-gray-700 translate-y-full pt-1"></div>
     </div>
-  )}
+  </div>
+  <div id="chart-empty" class="hidden text-center text-gray-700 text-xs py-4">No data yet — add rows to see the chart.</div>
+</div>
 
-  <!-- ── Table ─────────────────────────────────────────────────────────── -->
-  <div class="bg-card rounded-xl border border-border overflow-hidden">
-    <div class="overflow-x-auto">
-      <table class="w-full text-sm" id="report-table">
-        <!-- ── THEAD ── -->
-        <thead>
-          <!-- Column headers -->
-          <tr class="border-b border-border bg-card-2/50 text-xs text-gray-500 uppercase tracking-wide">
-            <th class="text-left px-4 py-3 font-medium sticky left-0 bg-card-2/50 min-w-[130px]">Date</th>
-            {columns.map((c, ci) => (
-              <th class="text-right px-3 py-3 font-medium relative group min-w-[130px]" data-col={c.key}>
-                <div class="flex items-center justify-end gap-1">
-                  <!-- Rename on click -->
-                  <span
-                    class="col-label-display cursor-pointer hover:text-gray-200 transition-colors"
-                    data-key={c.key}
-                    data-label={c.label}
-                    title="Click to rename"
-                  >{c.label}</span>
-                  <!-- Delete -->
-                  <form method="POST" class="inline-flex opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
-                    <input type="hidden" name="_action" value="delete_column" />
-                    <input type="hidden" name="col_key" value={c.key} />
-                    <button type="submit" onclick={`return confirm('Remove column "${c.label}"?')`}
-                      class="text-gray-700 hover:text-danger text-base leading-none px-0.5 transition-colors">×</button>
-                  </form>
-                </div>
-                <!-- Rename form (hidden) -->
-                <form method="POST" class="col-rename-form hidden mt-1 flex gap-1" data-key={c.key}>
-                  <input type="hidden" name="_action" value="rename_column" />
+<!-- ── TABLE ──────────────────────────────────────────────────────────────── -->
+<div class="bg-card rounded-xl border border-border overflow-hidden">
+  <!-- Outer wrapper: scroll both axes -->
+  <div class="overflow-x-auto overflow-y-visible" style="scrollbar-width:thin">
+    <table class="text-sm border-collapse" id="report-table" style="min-width:max-content;width:100%">
+
+      <!-- THEAD -->
+      <thead>
+        <tr class="border-b border-border bg-card-2/50 text-xs text-gray-500 uppercase tracking-wide select-none">
+          <th class="text-left px-4 py-3 font-medium sticky left-0 bg-card-2/80 z-10 min-w-[140px] whitespace-nowrap">Date</th>
+
+          {columns.map((c, ci) => (
+            <th
+              class="text-right px-3 py-3 font-medium relative group min-w-[130px] cursor-grab active:cursor-grabbing"
+              data-col-key={c.key}
+              draggable="true"
+            >
+              <div class="flex items-center justify-end gap-1.5">
+                <!-- Drag handle -->
+                <span class="text-gray-700 opacity-0 group-hover:opacity-100 transition-opacity cursor-grab shrink-0 text-base">⠿</span>
+                <!-- Type badge -->
+                <span class={`text-[9px] px-1 py-0.5 rounded font-mono opacity-60 ${c.type === 'currency' ? 'bg-green-900/40 text-green-500' : 'bg-gray-800 text-gray-500'}`}>
+                  {c.type === 'currency' ? '$' : '#'}
+                </span>
+                <!-- Label (click to rename) -->
+                <span class="col-label-display hover:text-gray-200 cursor-pointer transition-colors" data-key={c.key} title="Click to rename">{c.label}</span>
+                <!-- Delete -->
+                <form method="POST" class="opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
+                  <input type="hidden" name="_action" value="delete_column" />
                   <input type="hidden" name="col_key" value={c.key} />
-                  <input type="text" name="col_label" value={c.label}
-                    class="col-rename-input w-full bg-card border border-accent/40 rounded px-1.5 py-0.5 text-xs text-gray-200 focus:outline-none text-left normal-case tracking-normal font-normal" />
-                  <button type="submit" class="text-accent text-xs font-bold">✓</button>
+                  <button type="submit" onclick={`return confirm('Remove column "${c.label}"?')`}
+                    class="text-gray-700 hover:text-danger text-base leading-none px-0.5">×</button>
                 </form>
-              </th>
-            ))}
-            <!-- Notes -->
-            <th class="text-left px-3 py-3 font-medium min-w-[160px]">Notes</th>
-            <!-- Add column "+" -->
-            <th class="px-2 py-3 w-10 text-center">
-              <button id="add-col-btn" class="text-gray-600 hover:text-accent text-lg leading-none transition-colors font-light" title="Add column">＋</button>
-            </th>
-            <th class="w-8"></th>
-          </tr>
-
-          <!-- Add-column inline form (hidden) -->
-          <tr id="add-col-row" class="hidden border-b border-accent/20 bg-accent/5">
-            <td class="px-4 py-2 text-xs text-gray-500 italic">New column:</td>
-            <td colspan={columns.length + 1} class="px-3 py-2">
-              <form method="POST" class="flex items-center gap-2 flex-wrap">
-                <input type="hidden" name="_action" value="add_column" />
-                <input type="text" name="col_key" required placeholder="key (no spaces)"
-                  class="bg-card border border-border rounded px-2.5 py-1.5 text-xs text-gray-200 focus:border-accent outline-none w-36" />
-                <input type="text" name="col_label" placeholder="Display label"
-                  class="bg-card border border-border rounded px-2.5 py-1.5 text-xs text-gray-200 focus:border-accent outline-none w-36" />
-                <button type="submit" class="bg-accent hover:bg-accent-dark text-white text-xs font-medium px-3 py-1.5 rounded transition-colors">Add</button>
-                <button type="button" id="cancel-col-btn" class="text-gray-600 hover:text-gray-300 text-xs px-2 py-1.5 transition-colors">Cancel</button>
+              </div>
+              <!-- Rename form -->
+              <form method="POST" class="col-rename-form hidden mt-1 flex gap-1 justify-end" data-key={c.key}>
+                <input type="hidden" name="_action" value="rename_column" />
+                <input type="hidden" name="col_key" value={c.key} />
+                <input type="text" name="col_label" value={c.label}
+                  class="col-rename-input w-24 bg-card border border-accent/40 rounded px-1.5 py-0.5 text-xs text-gray-200 focus:outline-none text-left normal-case tracking-normal font-normal" />
+                <button type="submit" class="text-accent text-xs font-bold shrink-0">✓</button>
               </form>
-            </td>
-            <td></td>
-          </tr>
-        </thead>
+            </th>
+          ))}
 
-        <!-- ── TBODY ── -->
-        <tbody id="report-tbody">
-          {(!entriesDesc || entriesDesc.length === 0) ? (
-            <tr>
-              <td colspan={columns.length + 4} class="text-center text-gray-600 text-sm py-14">
-                No data yet — add the first row below.
+          <th class="text-left px-3 py-3 font-medium min-w-[160px] whitespace-nowrap">Notes</th>
+          <!-- "+" add column -->
+          <th class="px-2 py-3 w-10 text-center sticky right-0 bg-card-2/80">
+            <button id="add-col-btn" class="text-gray-600 hover:text-accent text-xl leading-none transition-colors" title="Add column">＋</button>
+          </th>
+          <th class="w-8"></th>
+        </tr>
+
+        <!-- Add-column inline row -->
+        <tr id="add-col-row" class="hidden border-b border-accent/20 bg-accent/5">
+          <td class="px-4 py-2 text-xs text-gray-500 sticky left-0">New column:</td>
+          <td colspan={columns.length + 3} class="px-3 py-2">
+            <form method="POST" class="flex items-center gap-2 flex-wrap" id="add-col-form">
+              <input type="hidden" name="_action" value="add_column" />
+              <input type="text" name="col_key" required placeholder="key_name"
+                class="bg-card border border-border rounded px-2.5 py-1.5 text-xs text-gray-200 focus:border-accent outline-none w-32" />
+              <input type="text" name="col_label" placeholder="Display label"
+                class="bg-card border border-border rounded px-2.5 py-1.5 text-xs text-gray-200 focus:border-accent outline-none w-36" />
+              <select name="col_type" class="bg-card border border-border rounded px-2.5 py-1.5 text-xs text-gray-200 focus:border-accent outline-none">
+                <option value="number"># Number</option>
+                <option value="currency">$ Currency</option>
+              </select>
+              <button type="submit" class="bg-accent hover:bg-accent-dark text-white text-xs font-medium px-3 py-1.5 rounded transition-colors">Add</button>
+              <button type="button" id="cancel-col-btn" class="text-gray-600 hover:text-gray-300 text-xs px-2 py-1.5">Cancel</button>
+            </form>
+          </td>
+        </tr>
+      </thead>
+
+      <!-- TBODY -->
+      <tbody id="report-tbody">
+        {(!entriesDesc || entriesDesc.length === 0) ? (
+          <tr>
+            <td colspan={columns.length + 4} class="text-center text-gray-600 text-sm py-14">
+              No data yet — add the first row below.
+            </td>
+          </tr>
+        ) : (
+          entriesDesc.map((entry: any) => (
+            <tr class="border-b border-border/30 hover:bg-card-2/20 transition-colors group" data-row-id={entry.id} data-date={entry.entry_date}>
+              <td class="px-4 py-1.5 text-gray-400 font-mono text-xs sticky left-0 bg-card group-hover:bg-[#0d1117] whitespace-nowrap z-[1]">
+                {formatDateDisplay(entry.entry_date, granularity)}
               </td>
-            </tr>
-          ) : (
-            entriesDesc.map((entry: any) => (
-              <tr class="border-b border-border/40 hover:bg-card-2/20 transition-colors group" data-row-id={entry.id} data-date={entry.entry_date}>
-                <td class="px-4 py-1.5 text-gray-400 font-mono text-xs sticky left-0 bg-card group-hover:bg-card-2/20 whitespace-nowrap">
-                  {formatDateDisplay(entry.entry_date, granularity)}
-                </td>
-                {columns.map(c => (
-                  <td class="px-2 py-1 text-right">
-                    <form method="POST" class="w-full">
-                      <input type="hidden" name="_action" value="update_cell" />
-                      <input type="hidden" name="row_id" value={entry.id} />
-                      <input type="hidden" name="col_key" value={c.key} />
-                      <input type="number" step="0.01" name="value"
-                        value={entry.values?.[c.key] ?? ''}
-                        onchange="this.form.submit()"
-                        placeholder="—"
-                        class="w-full bg-transparent text-right text-sm text-gray-200 font-mono px-2 py-1 rounded hover:bg-card-2 focus:bg-card-2 focus:outline-none focus:ring-1 focus:ring-accent/50 transition-colors" />
-                    </form>
-                  </td>
-                ))}
-                <td class="px-2 py-1">
+              {columns.map(c => (
+                <td class="px-2 py-1 text-right min-w-[130px]">
                   <form method="POST" class="w-full">
-                    <input type="hidden" name="_action" value="update_notes" />
+                    <input type="hidden" name="_action" value="update_cell" />
                     <input type="hidden" name="row_id" value={entry.id} />
-                    <input type="text" name="notes" value={entry.notes ?? ''}
+                    <input type="hidden" name="col_key" value={c.key} />
+                    <input type="number" step="any" name="value"
+                      value={entry.values?.[c.key] ?? ''}
                       onchange="this.form.submit()"
                       placeholder="—"
-                      class="w-full bg-transparent text-sm text-gray-400 px-2 py-1 rounded hover:bg-card-2 focus:bg-card-2 focus:outline-none focus:ring-1 focus:ring-accent/50 transition-colors" />
+                      class={`w-full bg-transparent text-right text-sm font-mono px-2 py-1 rounded hover:bg-card-2 focus:bg-card-2 focus:outline-none focus:ring-1 focus:ring-accent/50 transition-colors ${c.type === 'currency' ? 'text-green-400' : 'text-gray-200'}`} />
                   </form>
-                </td>
-                <td class="px-1 w-10"></td>
-                <td class="px-2 py-1 w-8 opacity-0 group-hover:opacity-100 transition-opacity">
-                  <form method="POST">
-                    <input type="hidden" name="_action" value="delete_row" />
-                    <input type="hidden" name="row_id" value={entry.id} />
-                    <button type="submit" onclick="return confirm('Delete this row?')"
-                      class="text-gray-700 hover:text-danger text-sm transition-colors">✕</button>
-                  </form>
-                </td>
-              </tr>
-            ))
-          )}
-
-          <!-- ── Add-row inline row ── -->
-          <tr class="border-t border-dashed border-border/60 bg-card-2/10 hover:bg-card-2/30 transition-colors" id="add-row-tr">
-            <td class="px-4 py-2">
-              <form method="POST" id="add-row-form" class="flex items-center gap-2">
-                <input type="hidden" name="_action" value="add_row" />
-                <input type="hidden" name="granularity" value={granularity} />
-                <span class="text-gray-600 text-xs shrink-0">+</span>
-                <input type="date" name="entry_date" required value={today}
-                  class="bg-card border border-border rounded px-2 py-1 text-xs text-gray-200 focus:border-accent outline-none" />
-              </form>
-            </td>
-            {columns.map(() => <td></td>)}
-            <td class="px-2 py-2">
-              <input type="text" name="notes" form="add-row-form" placeholder="Notes…"
-                class="w-full bg-transparent text-xs text-gray-500 px-1 py-1 rounded focus:bg-card-2 focus:outline-none focus:ring-1 focus:ring-accent/40" />
-            </td>
-            <td class="px-1 py-2" colspan="2">
-              <button type="submit" form="add-row-form"
-                class="bg-accent hover:bg-accent-dark text-white text-xs font-medium px-3 py-1 rounded transition-colors whitespace-nowrap">
-                + Add Row
-              </button>
-            </td>
-          </tr>
-        </tbody>
-
-        <!-- ── TFOOT ── -->
-        {entriesDesc && entriesDesc.length > 0 && (
-          <tfoot>
-            <tr class="border-t-2 border-border bg-card-2/50 font-semibold">
-              <td class="px-4 py-2.5 text-xs text-gray-400 uppercase tracking-wide sticky left-0 bg-card-2/50">Total</td>
-              {columns.map(c => (
-                <td class="px-2 py-2.5 text-right font-mono text-sm text-gray-200">
-                  {totals[c.key] % 1 === 0
-                    ? totals[c.key].toLocaleString()
-                    : totals[c.key].toLocaleString(undefined, { maximumFractionDigits: 2 })}
                 </td>
               ))}
-              <td colspan="3"></td>
+              <td class="px-2 py-1 min-w-[160px]">
+                <form method="POST" class="w-full">
+                  <input type="hidden" name="_action" value="update_notes" />
+                  <input type="hidden" name="row_id" value={entry.id} />
+                  <input type="text" name="notes" value={entry.notes ?? ''}
+                    onchange="this.form.submit()"
+                    placeholder="—"
+                    class="w-full bg-transparent text-xs text-gray-500 px-2 py-1 rounded hover:bg-card-2 focus:bg-card-2 focus:outline-none" />
+                </form>
+              </td>
+              <td class="w-10"></td>
+              <td class="px-2 py-1 w-8 opacity-0 group-hover:opacity-100 transition-opacity">
+                <form method="POST">
+                  <input type="hidden" name="_action" value="delete_row" />
+                  <input type="hidden" name="row_id" value={entry.id} />
+                  <button type="submit" onclick="return confirm('Delete this row?')" class="text-gray-700 hover:text-danger text-sm">✕</button>
+                </form>
+              </td>
             </tr>
-          </tfoot>
+          ))
         )}
-      </table>
-    </div>
-  </div>
 
-  <p class="text-xs text-gray-700 mt-3">
-    💡 Click any cell to edit — auto-saves on blur. Click a column header to rename it. Hover row to delete.
-  </p>
+        <!-- Add-row inline bottom row -->
+        <tr class="border-t border-dashed border-border/50 bg-card-2/10 hover:bg-card-2/20 transition-colors">
+          <td class="px-4 py-2 sticky left-0 bg-card">
+            <form method="POST" id="add-row-form" class="flex items-center gap-2">
+              <input type="hidden" name="_action" value="add_row" />
+              <input type="hidden" name="granularity" value={granularity} />
+              <span class="text-gray-600 text-xs shrink-0">+</span>
+              <input type="date" name="entry_date" required value={today}
+                class="bg-transparent border-b border-border text-xs text-gray-300 focus:border-accent outline-none pb-0.5" />
+            </form>
+          </td>
+          {columns.map(() => <td class="min-w-[130px]"></td>)}
+          <td class="px-2 py-2 min-w-[160px]">
+            <input type="text" name="notes" form="add-row-form" placeholder="Notes…"
+              class="w-full bg-transparent text-xs text-gray-600 px-1 py-1 focus:bg-card-2 focus:outline-none rounded" />
+          </td>
+          <td class="px-2 py-2 sticky right-0 bg-card" colspan="2">
+            <button type="submit" form="add-row-form"
+              class="bg-accent hover:bg-accent-dark text-white text-xs font-medium px-3 py-1 rounded transition-colors whitespace-nowrap">
+              + Add Row
+            </button>
+          </td>
+        </tr>
+      </tbody>
+
+      <!-- TFOOT -->
+      {entriesDesc && entriesDesc.length > 0 && (
+        <tfoot>
+          <tr class="border-t-2 border-border bg-card-2/50 font-semibold">
+            <td class="px-4 py-2.5 text-xs text-gray-400 uppercase tracking-wide sticky left-0 bg-card-2/80">Total</td>
+            {columns.map(c => (
+              <td class="px-2 py-2.5 text-right font-mono text-sm min-w-[130px]">
+                <span class={c.type === 'currency' ? 'text-green-400' : 'text-gray-200'}>
+                  {c.type === 'currency'
+                    ? '$' + totals[c.key].toLocaleString(undefined, { maximumFractionDigits: 2 })
+                    : totals[c.key].toLocaleString(undefined, { maximumFractionDigits: 2 })}
+                </span>
+              </td>
+            ))}
+            <td colspan="3"></td>
+          </tr>
+        </tfoot>
+      )}
+    </table>
+  </div>
+</div>
+
+<p class="text-xs text-gray-700 mt-3">
+  💡 Click column header to rename · Drag columns to reorder · Hover row to delete · $ = currency, # = number
+</p>
+
 </Layout>
 
-<script define:vars={{ entriesJson, columnsJson, totalsJson, granStr, dealIdStr, buyerName, operatorName, dateFrom, dateTo }}>
-  const entries  = JSON.parse(entriesJson);
-  const columns  = JSON.parse(columnsJson);
-  const totals   = JSON.parse(totalsJson);
+<script define:vars={{ entriesJson, columnsJson, totalsJson, presetsJson, granStr: granularity, buyerName, opName, dateFrom, dateTo, CHART_COLORS }}>
+  const entries = JSON.parse(entriesJson);
+  const columns = JSON.parse(columnsJson);
+  const totals  = JSON.parse(totalsJson);
 
-  // ── Add column toggle ──────────────────────────────────────────────────
+  // ── Date filter auto-submit ────────────────────────────────────────────
+  document.querySelectorAll('#date-filter-form input[type="date"]').forEach(inp => {
+    inp.addEventListener('change', () => document.getElementById('date-filter-form')?.requestSubmit());
+  });
+
+  // ── Preset dropdown ───────────────────────────────────────────────────
+  const presetBtn = document.getElementById('preset-btn');
+  const presetDd  = document.getElementById('preset-dd');
+  presetBtn?.addEventListener('click', e => { e.stopPropagation(); presetDd?.classList.toggle('hidden'); });
+  document.addEventListener('click', () => presetDd?.classList.add('hidden'));
+
+  // ── Add-column toggle ─────────────────────────────────────────────────
   document.getElementById('add-col-btn')?.addEventListener('click', () => {
     const row = document.getElementById('add-col-row');
     row?.classList.toggle('hidden');
-    if (!row?.classList.contains('hidden')) row?.querySelector('input[name="col_key"]')?.focus();
+    if (!row?.classList.contains('hidden')) (row?.querySelector('input[name="col_key"]') as HTMLInputElement)?.focus();
   });
   document.getElementById('cancel-col-btn')?.addEventListener('click', () => {
     document.getElementById('add-col-row')?.classList.add('hidden');
   });
 
-  // ── Column rename (click label → show form) ────────────────────────────
+  // ── Column rename ─────────────────────────────────────────────────────
   document.querySelectorAll('.col-label-display').forEach(span => {
     span.addEventListener('click', () => {
-      const key = span.dataset.key;
-      span.classList.add('hidden');
-      const form = document.querySelector(`.col-rename-form[data-key="${key}"]`);
+      const key = (span as HTMLElement).dataset.key!;
+      (span as HTMLElement).classList.add('hidden');
+      const form = document.querySelector(`.col-rename-form[data-key="${key}"]`) as HTMLElement;
       form?.classList.remove('hidden');
       form?.classList.add('flex');
-      form?.querySelector('input[name="col_label"]')?.select();
+      (form?.querySelector('.col-rename-input') as HTMLInputElement)?.select();
     });
   });
-  document.querySelectorAll('.col-rename-form').forEach(form => {
-    form.querySelector('.col-rename-input')?.addEventListener('keydown', e => {
+  document.querySelectorAll('.col-rename-input').forEach(inp => {
+    inp.addEventListener('keydown', (e: any) => {
       if (e.key === 'Escape') {
-        const key = form.dataset.key;
-        form.classList.add('hidden');
-        form.classList.remove('flex');
-        document.querySelector(`.col-label-display[data-key="${key}"]`)?.classList.remove('hidden');
+        const form = inp.closest('.col-rename-form') as HTMLElement;
+        const key  = form?.dataset.key!;
+        form?.classList.add('hidden');
+        form?.classList.remove('flex');
+        (document.querySelector(`.col-label-display[data-key="${key}"]`) as HTMLElement)?.classList.remove('hidden');
       }
     });
   });
 
-  // ── SVG Chart ─────────────────────────────────────────────────────────
-  const chartSvg    = document.getElementById('chart-svg');
-  const chartLabels = document.getElementById('chart-labels');
-  const colSelect   = document.getElementById('chart-col-select');
+  // ── Drag & Drop column reorder ────────────────────────────────────────
+  const tbody = document.getElementById('report-tbody');
+  let dragSrcKey: string | null = null;
 
-  function drawChart(colKey) {
-    if (!chartSvg || entries.length < 2) return;
-    const values = entries.map(e => Number(e.values?.[colKey] ?? 0));
-    const min = Math.min(...values);
-    const max = Math.max(...values);
-    const range = max - min || 1;
-    const W = 1000, H = 80, PAD = 8;
-    const pts = values.map((v, i) => {
-      const x = PAD + (i / (values.length - 1)) * (W - PAD * 2);
-      const y = PAD + (1 - (v - min) / range) * (H - PAD * 2);
-      return `${x},${y}`;
+  document.querySelectorAll('th[data-col-key]').forEach(th => {
+    th.addEventListener('dragstart', (e: any) => {
+      dragSrcKey = (th as HTMLElement).dataset.colKey ?? null;
+      e.dataTransfer.effectAllowed = 'move';
+      (th as HTMLElement).style.opacity = '0.4';
     });
-    // Gradient fill
-    const fillPts = [`${PAD},${H}`, ...pts, `${W - PAD},${H}`].join(' ');
-    chartSvg.setAttribute('viewBox', `0 0 ${W} ${H}`);
-    chartSvg.innerHTML = `
-      <defs>
-        <linearGradient id="cg" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stop-color="#e11d48" stop-opacity="0.25"/>
-          <stop offset="100%" stop-color="#e11d48" stop-opacity="0"/>
-        </linearGradient>
-      </defs>
-      <polygon points="${fillPts}" fill="url(#cg)"/>
-      <polyline points="${pts.join(' ')}" fill="none" stroke="#e11d48" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-      ${pts.map((p, i) => `<circle cx="${p.split(',')[0]}" cy="${p.split(',')[1]}" r="3" fill="#e11d48" opacity="0.7"/>`).join('')}
-    `;
-    // Labels (show max 6 dates)
-    if (chartLabels) {
-      const step = Math.max(1, Math.floor(entries.length / 6));
-      const labelItems = entries
-        .filter((_, i) => i === 0 || i === entries.length - 1 || i % step === 0)
-        .map(e => {
+    th.addEventListener('dragend', () => {
+      (th as HTMLElement).style.opacity = '1';
+    });
+    th.addEventListener('dragover', (e: any) => {
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'move';
+      (th as HTMLElement).style.borderLeft = '2px solid #e11d48';
+    });
+    th.addEventListener('dragleave', () => {
+      (th as HTMLElement).style.borderLeft = '';
+    });
+    th.addEventListener('drop', (e: any) => {
+      e.preventDefault();
+      (th as HTMLElement).style.borderLeft = '';
+      const targetKey = (th as HTMLElement).dataset.colKey;
+      if (!dragSrcKey || !targetKey || dragSrcKey === targetKey) return;
+
+      // Reorder columns array
+      const keys = columns.map((c: any) => c.key);
+      const fromIdx = keys.indexOf(dragSrcKey);
+      const toIdx   = keys.indexOf(targetKey);
+      keys.splice(fromIdx, 1);
+      keys.splice(toIdx, 0, dragSrcKey);
+
+      // Send to server
+      const fd = new FormData();
+      fd.append('_action', 'reorder_columns');
+      fd.append('order', JSON.stringify(keys));
+      fetch(window.location.pathname + window.location.search, { method: 'POST', body: fd })
+        .then(() => window.location.reload());
+    });
+  });
+
+  // ── CHART ─────────────────────────────────────────────────────────────
+  const chartSvg   = document.getElementById('chart-svg')  as SVGElement | null;
+  const chartXaxis = document.getElementById('chart-xaxis') as HTMLElement | null;
+  const chartYaxis = document.getElementById('chart-yaxis') as HTMLElement | null;
+  const chartLegend= document.getElementById('chart-legend')as HTMLElement | null;
+  const chartEmpty = document.getElementById('chart-empty') as HTMLElement | null;
+
+  const W = 1000, H = 120, PADL = 0, PADR = 0, PADT = 8, PADB = 8;
+
+  // Active columns for chart (all numeric by default)
+  const activeKeys = new Set(columns.map((c: any) => c.key));
+
+  function drawChart() {
+    if (!chartSvg) return;
+    if (entries.length === 0) {
+      chartEmpty?.classList.remove('hidden');
+      chartSvg.parentElement?.classList.add('hidden');
+      return;
+    }
+    chartEmpty?.classList.add('hidden');
+    chartSvg.parentElement?.classList.remove('hidden');
+
+    // Remove old dynamic elements
+    chartSvg.querySelectorAll('.dyn').forEach(el => el.remove());
+
+    const visibleCols = columns.filter((c: any) => activeKeys.has(c.key));
+    if (!visibleCols.length) return;
+
+    // Compute global max across visible columns for shared Y scale
+    let globalMax = 0;
+    visibleCols.forEach((col: any) => {
+      entries.forEach((e: any) => {
+        const v = Number(e.values?.[col.key] ?? 0);
+        if (!Number.isNaN(v) && v > globalMax) globalMax = v;
+      });
+    });
+    if (globalMax === 0) globalMax = 1;
+
+    const n = entries.length;
+    const xStep = n > 1 ? (W - PADL - PADR) / (n - 1) : W / 2;
+
+    visibleCols.forEach((col: any, ci: number) => {
+      const color = CHART_COLORS[columns.findIndex((c: any) => c.key === col.key) % CHART_COLORS.length];
+      const vals  = entries.map((e: any) => Number(e.values?.[col.key] ?? 0));
+      const pts   = vals.map((v: number, i: number) => {
+        const x = PADL + (n > 1 ? i * xStep : W / 2);
+        const y = PADT + (1 - v / globalMax) * (H - PADT - PADB);
+        return [x, y] as [number, number];
+      });
+
+      // Area fill
+      if (pts.length > 1) {
+        const fillPts = [`${PADL},${H - PADB}`, ...pts.map(p => `${p[0]},${p[1]}`), `${W - PADR},${H - PADB}`].join(' ');
+        const poly = document.createElementNS('http://www.w3.org/2000/svg', 'polygon');
+        poly.setAttribute('points', fillPts);
+        poly.setAttribute('fill', color);
+        poly.setAttribute('fill-opacity', '0.08');
+        poly.classList.add('dyn');
+        chartSvg.appendChild(poly);
+
+        // Line
+        const polyline = document.createElementNS('http://www.w3.org/2000/svg', 'polyline');
+        polyline.setAttribute('points', pts.map(p => p.join(',')).join(' '));
+        polyline.setAttribute('fill', 'none');
+        polyline.setAttribute('stroke', color);
+        polyline.setAttribute('stroke-width', '2');
+        polyline.setAttribute('stroke-linecap', 'round');
+        polyline.setAttribute('stroke-linejoin', 'round');
+        polyline.classList.add('dyn');
+        chartSvg.appendChild(polyline);
+      }
+
+      // Dots
+      pts.forEach(([x, y]: [number, number]) => {
+        const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+        circle.setAttribute('cx', String(x));
+        circle.setAttribute('cy', String(y));
+        circle.setAttribute('r', '3');
+        circle.setAttribute('fill', color);
+        circle.classList.add('dyn');
+        chartSvg.appendChild(circle);
+      });
+    });
+
+    // Y-axis labels
+    if (chartYaxis) {
+      const steps = [globalMax, globalMax * 0.66, globalMax * 0.33, 0];
+      chartYaxis.innerHTML = steps.map(v => `<span>${v >= 1000 ? (v/1000).toFixed(1)+'k' : Math.round(v)}</span>`).join('');
+    }
+
+    // X-axis labels (up to 7)
+    if (chartXaxis && n > 0) {
+      const step = Math.max(1, Math.floor(n / 7));
+      const labels = entries
+        .filter((_: any, i: number) => i === 0 || i === n - 1 || i % step === 0)
+        .map((e: any) => {
           const d = new Date(e.date + 'T00:00:00');
           return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
         });
-      chartLabels.innerHTML = labelItems.map(l => `<span>${l}</span>`).join('');
+      chartXaxis.innerHTML = labels.map((l: string) => `<span>${l}</span>`).join('');
     }
   }
 
-  if (colSelect) {
-    drawChart(colSelect.value);
-    colSelect.addEventListener('change', () => drawChart(colSelect.value));
+  // Legend with checkboxes
+  if (chartLegend) {
+    columns.forEach((col: any, ci: number) => {
+      const color = CHART_COLORS[ci % CHART_COLORS.length];
+      const item  = document.createElement('label');
+      item.className = 'flex items-center gap-1.5 cursor-pointer text-xs text-gray-400 hover:text-gray-200 transition-colors';
+      item.innerHTML = `
+        <span class="w-3 h-0.5 rounded-full inline-block shrink-0" style="background:${color}"></span>
+        <input type="checkbox" class="hidden" checked />
+        <span>${col.label}</span>
+      `;
+      const cb = item.querySelector('input')!;
+      cb.addEventListener('change', () => {
+        if (cb.checked) activeKeys.add(col.key); else activeKeys.delete(col.key);
+        const dot = item.querySelector('span') as HTMLElement;
+        dot.style.opacity = cb.checked ? '1' : '0.25';
+        drawChart();
+      });
+      chartLegend.appendChild(item);
+    });
   }
+
+  drawChart();
 
   // ── Export CSV ────────────────────────────────────────────────────────
   document.getElementById('export-csv')?.addEventListener('click', () => {
-    const colKeys   = columns.map(c => c.key);
-    const colLabels = columns.map(c => c.label);
-    const rows      = [...document.querySelectorAll('#report-tbody tr[data-row-id]')];
-
-    // Build rows from DOM (captured current values)
-    const dataRows = rows.map(tr => {
-      const date = tr.dataset.date ?? '';
-      const cells = colKeys.map(key => {
-        const input = tr.querySelector(`input[name="value"][form*="${tr.dataset.rowId}"], form input[name="value"]`);
-        // Fallback to entry data
-        const entry = entries.find(e => e.date === date);
-        return entry ? (entry.values?.[key] ?? '') : '';
-      });
-      const notesInput = tr.querySelector('input[name="notes"]');
-      const notes = notesInput ? notesInput.value : '';
-      return [date, ...cells, notes];
-    });
-
-    // Build from entries array (more reliable)
-    const csvRows = [
+    const colKeys   = columns.map((c: any) => c.key);
+    const colLabels = columns.map((c: any) => c.label);
+    const csvRows   = [
       ['Date', ...colLabels, 'Notes'],
-      ...entries.map(e => [
-        e.date,
-        ...colKeys.map(k => e.values?.[k] ?? ''),
-        ''
-      ]),
-      ['TOTAL', ...colKeys.map(k => totals[k] ?? 0), ''],
+      ...entries.map((e: any) => [e.date, ...colKeys.map((k: string) => e.values?.[k] ?? ''), e.notes ?? '']),
+      ['TOTAL', ...colKeys.map((k: string) => totals[k] ?? 0), ''],
     ];
-
-    const csvContent = csvRows
-      .map(row => row.map(v => `"${String(v).replace(/"/g, '""')}"`).join(','))
-      .join('\n');
-
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
+    const csv  = csvRows.map(r => r.map(v => `"${String(v).replace(/"/g,'""')}"`).join(',')).join('\n');
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement('a');
     const period = dateFrom && dateTo ? `_${dateFrom}_to_${dateTo}` : `_${granStr}`;
     a.href = url;
-    a.download = `report_${buyerName.replace(/\s+/g,'_')}_${operatorName.replace(/\s+/g,'_')}${period}.csv`;
+    a.download = `report_${buyerName}_${opName}${period}.csv`.replace(/\s+/g,'_');
     a.click();
     URL.revokeObjectURL(url);
-  });
-
-  // ── Auto-apply date filter on change ──────────────────────────────────
-  document.querySelectorAll('#date-filter-form input[type="date"]').forEach(input => {
-    input.addEventListener('change', () => {
-      document.getElementById('date-filter-form')?.requestSubmit();
-    });
   });
 </script>
