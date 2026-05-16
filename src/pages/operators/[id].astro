@@ -35,6 +35,7 @@ if (Astro.request.method === 'POST') {
     rating: ratingRaw ? Number(ratingRaw) : null,
     notes: (form.get('notes') as string) || null,
     links: links.length > 0 ? links : null,
+    brief_text: (form.get('brief_text') as string) || null,
   }).eq('id', id!);
   return Astro.redirect('/operators');
 }
@@ -184,6 +185,33 @@ const inputCls = "w-full bg-card-2 border border-border rounded-lg px-4 py-2 tex
       <textarea name="notes" rows="3" class={`${inputCls} resize-none`}>{op.notes || ''}</textarea>
     </div>
 
+    <!-- Client Brief -->
+    <div class="border-t border-border pt-5">
+      <div class="flex items-center justify-between mb-3">
+        <div>
+          <label class="block text-sm text-gray-300 font-medium">Client Brief</label>
+          <p class="text-xs text-gray-600 mt-0.5">Paste brief text or CSV data about this operator / offer</p>
+        </div>
+        <label class="flex items-center gap-2 bg-card-2 border border-border hover:border-accent/40 text-xs text-gray-400 hover:text-gray-200 px-3 py-1.5 rounded-lg cursor-pointer transition-colors">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M17 8l-5-5-5 5M12 3v12"/></svg>
+          Import file
+          <input type="file" id="brief-file-input" accept=".txt,.csv,.md" class="hidden" />
+        </label>
+      </div>
+      <textarea
+        name="brief_text"
+        id="brief-textarea"
+        rows="8"
+        placeholder="Paste the client brief here — offer description, GEO targets, KPIs, payout structure, restrictions, creative guidelines, contact info…"
+        class={`${inputCls} resize-y font-mono text-xs leading-relaxed`}
+      >{op.brief_text || ''}</textarea>
+      {op.brief_text && (
+        <p class="text-xs text-gray-700 mt-1.5">
+          {(op.brief_text as string).length} characters · last saved with operator record
+        </p>
+      )}
+    </div>
+
     <div class="flex items-center justify-between pt-2">
       <button type="submit" class="bg-accent hover:bg-accent-dark text-white font-medium px-6 py-2.5 rounded-lg transition-colors shadow-lg shadow-accent/20">
         Save Changes
@@ -233,5 +261,17 @@ const inputCls = "w-full bg-card-2 border border-border rounded-lg px-4 py-2 tex
   dots.forEach((dot, i) => {
     (dot as HTMLElement).style.cursor = 'pointer';
     dot.addEventListener('click', () => { input.value = String(i + 1); updateDots(i + 1); });
+  });
+
+  // ── Brief file import ────────────────────────────────────────────────
+  document.getElementById('brief-file-input')?.addEventListener('change', (e) => {
+    const file = (e.target as HTMLInputElement).files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      const textarea = document.getElementById('brief-textarea') as HTMLTextAreaElement;
+      if (textarea) textarea.value = ev.target?.result as string;
+    };
+    reader.readAsText(file, 'utf-8');
   });
 </script>

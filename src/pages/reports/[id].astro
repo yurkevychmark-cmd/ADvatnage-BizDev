@@ -4,17 +4,16 @@ import { supabase } from '../../lib/supabase';
 
 const { id } = Astro.params;
 
-// Default columns (used if deal has no custom report_columns set)
 const DEFAULT_COLUMNS = [
-  { key: 'spend',       label: 'Spend ($)',        type: 'number' },
-  { key: 'impressions', label: 'Impressions',      type: 'number' },
-  { key: 'clicks',      label: 'Clicks',           type: 'number' },
-  { key: 'leads',       label: 'Leads',            type: 'number' },
-  { key: 'ftd',         label: 'FTD',              type: 'number' },
-  { key: 'revenue',     label: 'Revenue ($)',      type: 'number' },
+  { key: 'spend',       label: 'Spend ($)',   type: 'number' },
+  { key: 'impressions', label: 'Impressions', type: 'number' },
+  { key: 'clicks',      label: 'Clicks',      type: 'number' },
+  { key: 'leads',       label: 'Leads',       type: 'number' },
+  { key: 'ftd',         label: 'FTD',         type: 'number' },
+  { key: 'revenue',     label: 'Revenue ($)', type: 'number' },
 ];
 
-// ── POST actions ──────────────────────────────────────────────────────────
+// ── POST actions ────────────────────────────────────────────────────────────
 if (Astro.request.method === 'POST') {
   const form = await Astro.request.formData();
   const action = form.get('_action') as string;
@@ -30,17 +29,18 @@ if (Astro.request.method === 'POST') {
   }
 
   if (action === 'update_cell') {
-    const rowId   = form.get('row_id') as string;
-    const colKey  = form.get('col_key') as string;
-    const value   = form.get('value') as string;
-    // Fetch current values
+    const rowId  = form.get('row_id') as string;
+    const colKey = form.get('col_key') as string;
+    const value  = form.get('value') as string;
     const { data: row } = await supabase.from('report_entries').select('values').eq('id', rowId).single();
     const newValues = { ...((row as any)?.values ?? {}), [colKey]: value === '' ? null : Number(value) };
     await supabase.from('report_entries').update({ values: newValues }).eq('id', rowId);
   }
 
   if (action === 'update_notes') {
-    await supabase.from('report_entries').update({ notes: form.get('notes') as string || null }).eq('id', form.get('row_id') as string);
+    await supabase.from('report_entries')
+      .update({ notes: (form.get('notes') as string) || null })
+      .eq('id', form.get('row_id') as string);
   }
 
   if (action === 'delete_row') {
@@ -57,6 +57,15 @@ if (Astro.request.method === 'POST') {
     }
   }
 
+  if (action === 'rename_column') {
+    const { data: deal } = await supabase.from('projects').select('report_columns').eq('id', id).single();
+    const existing = ((deal as any)?.report_columns ?? DEFAULT_COLUMNS) as any[];
+    const colKey = form.get('col_key') as string;
+    const newLabel = (form.get('col_label') as string).trim();
+    const updated = existing.map(c => c.key === colKey ? { ...c, label: newLabel || c.label } : c);
+    await supabase.from('projects').update({ report_columns: updated }).eq('id', id);
+  }
+
   if (action === 'delete_column') {
     const { data: deal } = await supabase.from('projects').select('report_columns').eq('id', id).single();
     const existing = ((deal as any)?.report_columns ?? DEFAULT_COLUMNS) as any[];
@@ -67,8 +76,10 @@ if (Astro.request.method === 'POST') {
   return Astro.redirect(Astro.url.pathname + Astro.url.search);
 }
 
-// ── Data ──────────────────────────────────────────────────────────────────
+// ── Data ─────────────────────────────────────────────────────────────────────
 const granularity = Astro.url.searchParams.get('g') ?? 'day';
+const dateFrom    = Astro.url.searchParams.get('from') ?? '';
+const dateTo      = Astro.url.searchParams.get('to')   ?? '';
 
 const { data: deal } = await supabase
   .from('projects')
@@ -76,20 +87,25 @@ const { data: deal } = await supabase
   .eq('id', id)
   .single();
 
-if (!deal) {
-  return Astro.redirect('/deals');
-}
+if (!deal) return Astro.redirect('/reports');
 
-const { data: entries } = await supabase
+let q = supabase
   .from('report_entries')
   .select('*')
   .eq('project_id', id)
   .eq('granularity', granularity)
-  .order('entry_date', { ascending: false });
+  .order('entry_date', { ascending: true });
 
-const columns = ((deal as any).report_columns?.length ? (deal as any).report_columns : DEFAULT_COLUMNS) as { key: string; label: string; type: string }[];
+if (dateFrom) q = q.gte('entry_date', dateFrom);
+if (dateTo)   q = q.lte('entry_date', dateTo);
 
-// Aggregate totals
+const { data: entries } = await q;
+
+const columns = ((deal as any).report_columns?.length
+  ? (deal as any).report_columns
+  : DEFAULT_COLUMNS) as { key: string; label: string; type: string }[];
+
+// Totals
 const totals: Record<string, number> = {};
 columns.forEach(c => { totals[c.key] = 0; });
 (entries ?? []).forEach((e: any) => {
@@ -99,179 +115,261 @@ columns.forEach(c => { totals[c.key] = 0; });
   });
 });
 
-const granularityTabs = [
-  { key: 'day',   label: 'Day' },
-  { key: 'week',  label: 'Week' },
-  { key: 'month', label: 'Month' },
-];
-
-function formatDateInput(d: string): string {
-  // Just return as-is, HTML date input expects YYYY-MM-DD
-  return d;
-}
-function formatDateDisplay(d: string, gran: string): string {
-  const date = new Date(d);
-  if (gran === 'month') {
-    return date.toLocaleDateString('uk-UA', { month: 'long', year: 'numeric' });
-  }
-  if (gran === 'week') {
-    const end = new Date(date); end.setDate(end.getDate() + 6);
-    return `${date.toLocaleDateString('uk-UA', { day: '2-digit', month: '2-digit' })} – ${end.toLocaleDateString('uk-UA', { day: '2-digit', month: '2-digit' })}`;
-  }
-  return date.toLocaleDateString('uk-UA', { day: '2-digit', month: '2-digit', year: 'numeric', weekday: 'short' });
-}
-
 const today = new Date().toISOString().slice(0, 10);
 const dealAny = deal as any;
+
+function formatDateDisplay(d: string, gran: string): string {
+  const date = new Date(d + 'T00:00:00');
+  if (gran === 'month') return date.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+  if (gran === 'week') {
+    const end = new Date(date); end.setDate(end.getDate() + 6);
+    return `${date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} – ${end.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`;
+  }
+  return date.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+}
+
+// Chart data — pass all entries + column keys to client
+const entriesJson  = JSON.stringify((entries ?? []).map((e: any) => ({
+  date: e.entry_date,
+  values: e.values ?? {},
+})));
+const columnsJson  = JSON.stringify(columns);
+const totalsJson   = JSON.stringify(totals);
+const granStr      = granularity;
+const dealIdStr    = id as string;
+const buyerName    = dealAny.buyer?.name ?? '—';
+const operatorName = dealAny.operator?.name ?? '—';
+
+// Reversed entries for table (newest first)
+const entriesDesc = [...(entries ?? [])].reverse();
 ---
 
-<Layout title={`Report — ${dealAny.name}`}>
-  <!-- Back + header -->
-  <div class="mb-6">
-    <a href="/deals" class="text-xs text-gray-500 hover:text-accent transition-colors inline-flex items-center gap-1 mb-3">
-      ← Back to Deals
-    </a>
-    <div class="flex items-start justify-between gap-4 flex-wrap">
-      <div>
-        <h1 class="text-2xl font-bold">📊 Daily Reports</h1>
-        <p class="text-gray-500 text-sm mt-1">
-          <span class="font-semibold text-gray-300">{dealAny.buyer?.name ?? '—'}</span>
-          <span class="text-gray-700 mx-1">↔</span>
-          <span class="font-semibold text-gray-300">{dealAny.operator?.name ?? '—'}</span>
-        </p>
+<Layout title={`Report — ${buyerName} ↔ ${operatorName}`}>
+
+  <!-- ── Header ─────────────────────────────────────────────────────────── -->
+  <div class="flex items-start justify-between gap-4 flex-wrap mb-5">
+    <div>
+      <div class="flex items-center gap-2 text-xs text-gray-600 mb-2">
+        <a href="/reports" class="hover:text-accent transition-colors">Reports</a>
+        <span>/</span>
+        <span class="text-gray-400">{buyerName} ↔ {operatorName}</span>
       </div>
-      <button id="toggle-col-form" class="text-xs text-gray-400 hover:text-accent border border-border bg-card-2 px-3 py-1.5 rounded-lg transition-colors">
-        + Add Column
-      </button>
+      <h1 class="text-xl font-bold flex items-center gap-2">
+        <span>📊</span>
+        <span>{buyerName}</span>
+        <span class="text-gray-600 font-normal">↔</span>
+        <span>{operatorName}</span>
+      </h1>
     </div>
+    <!-- Export button -->
+    <button id="export-csv" class="flex items-center gap-2 bg-card-2 hover:bg-border border border-border text-gray-300 hover:text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>
+      Export CSV
+    </button>
   </div>
 
-  <!-- Granularity tabs -->
-  <div class="flex gap-1 mb-5 bg-card-2 p-1 rounded-lg w-fit border border-border">
-    {granularityTabs.map(t => (
-      <a href={`/reports/${id}?g=${t.key}`}
-        class={`px-4 py-1.5 rounded-md text-sm font-medium transition-colors ${
-          granularity === t.key ? 'bg-card text-white shadow' : 'text-gray-500 hover:text-gray-300'
-        }`}>
-        {t.label}
-      </a>
-    ))}
-  </div>
+  <!-- ── Toolbar: granularity + date range ──────────────────────────────── -->
+  <div class="flex flex-wrap items-center gap-3 mb-5">
+    <!-- Granularity -->
+    <div class="flex gap-0.5 bg-card-2 p-1 rounded-lg border border-border">
+      {[['day','Day'],['week','Week'],['month','Month']].map(([key, label]) => (
+        <a href={`/reports/${id}?g=${key}${dateFrom ? '&from='+dateFrom : ''}${dateTo ? '&to='+dateTo : ''}`}
+          class={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${granularity === key ? 'bg-card text-white shadow' : 'text-gray-500 hover:text-gray-300'}`}>
+          {label}
+        </a>
+      ))}
+    </div>
 
-  <!-- Add column form (hidden by default) -->
-  <div id="col-form" class="hidden mb-5 bg-card rounded-xl border border-border p-4">
-    <form method="POST" class="flex items-end gap-3">
-      <input type="hidden" name="_action" value="add_column" />
-      <div class="flex-1">
-        <label class="block text-xs text-gray-500 mb-1">Column key (without spaces)</label>
-        <input type="text" name="col_key" required placeholder="cpa, roi, conversions…"
-          class="w-full bg-card-2 border border-border rounded-lg px-3 py-2 text-sm text-gray-200 focus:border-accent outline-none" />
-      </div>
-      <div class="flex-1">
-        <label class="block text-xs text-gray-500 mb-1">Display label</label>
-        <input type="text" name="col_label" placeholder="CPA ($)"
-          class="w-full bg-card-2 border border-border rounded-lg px-3 py-2 text-sm text-gray-200 focus:border-accent outline-none" />
-      </div>
-      <button type="submit" class="bg-accent hover:bg-accent-dark text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors">
-        Add
+    <!-- Date range -->
+    <form id="date-filter-form" method="GET" class="flex items-center gap-2">
+      <input type="hidden" name="g" value={granularity} />
+      <span class="text-xs text-gray-600">From</span>
+      <input type="date" name="from" value={dateFrom}
+        class="bg-card border border-border rounded-lg px-2.5 py-1.5 text-sm text-gray-200 focus:border-accent outline-none" />
+      <span class="text-xs text-gray-600">to</span>
+      <input type="date" name="to" value={dateTo}
+        class="bg-card border border-border rounded-lg px-2.5 py-1.5 text-sm text-gray-200 focus:border-accent outline-none" />
+      <button type="submit" class="bg-card-2 hover:bg-border border border-border text-gray-400 hover:text-white text-xs px-3 py-1.5 rounded-lg transition-colors">
+        Apply
       </button>
+      {(dateFrom || dateTo) && (
+        <a href={`/reports/${id}?g=${granularity}`} class="text-xs text-gray-600 hover:text-danger transition-colors">✕ Clear</a>
+      )}
     </form>
   </div>
 
-  <!-- Add row form (always visible at top of table) -->
+  <!-- ── Mini chart ────────────────────────────────────────────────────── -->
+  {(entries?.length ?? 0) > 1 && (
+    <div class="bg-card rounded-xl border border-border p-4 mb-5">
+      <div class="flex items-center justify-between mb-3 gap-3 flex-wrap">
+        <p class="text-xs text-gray-500 uppercase tracking-wide font-medium">Trend</p>
+        <div class="flex items-center gap-2">
+          <span class="text-xs text-gray-600">Column:</span>
+          <select id="chart-col-select" class="bg-card-2 border border-border rounded px-2 py-1 text-xs text-gray-200 focus:border-accent outline-none">
+            {columns.map(c => <option value={c.key}>{c.label}</option>)}
+          </select>
+        </div>
+      </div>
+      <div id="chart-container" class="h-24 relative">
+        <svg id="chart-svg" class="w-full h-full" preserveAspectRatio="none"></svg>
+        <div id="chart-labels" class="absolute bottom-0 left-0 right-0 flex justify-between px-1 text-[9px] text-gray-700 pointer-events-none"></div>
+      </div>
+    </div>
+  )}
+
+  <!-- ── Table ─────────────────────────────────────────────────────────── -->
   <div class="bg-card rounded-xl border border-border overflow-hidden">
-    <form method="POST" class="flex items-center gap-3 px-5 py-3 border-b border-border bg-card-2/60">
-      <input type="hidden" name="_action" value="add_row" />
-      <input type="hidden" name="granularity" value={granularity} />
-      <span class="text-xs text-gray-500 uppercase tracking-wide font-medium">+ New row:</span>
-      <input type="date" name="entry_date" required value={today}
-        class="bg-card border border-border rounded-lg px-3 py-1.5 text-sm text-gray-200 focus:border-accent outline-none" />
-      <input type="text" name="notes" placeholder="Notes…"
-        class="flex-1 bg-card border border-border rounded-lg px-3 py-1.5 text-sm text-gray-200 placeholder-gray-600 focus:border-accent outline-none" />
-      <button type="submit" class="bg-accent hover:bg-accent-dark text-white text-sm font-medium px-4 py-1.5 rounded-lg transition-colors">
-        Add Row
-      </button>
-    </form>
-
-    <!-- Table -->
     <div class="overflow-x-auto">
-      <table class="w-full text-sm">
+      <table class="w-full text-sm" id="report-table">
+        <!-- ── THEAD ── -->
         <thead>
-          <tr class="border-b border-border bg-card-2/40 text-xs text-gray-500 uppercase tracking-wide">
-            <th class="text-left px-4 py-2.5 font-medium sticky left-0 bg-card-2/40">Date</th>
-            {columns.map(c => (
-              <th class="text-right px-3 py-2.5 font-medium relative group min-w-[120px]">
-                <span>{c.label}</span>
-                <form method="POST" class="inline-block ml-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                  <input type="hidden" name="_action" value="delete_column" />
+          <!-- Column headers -->
+          <tr class="border-b border-border bg-card-2/50 text-xs text-gray-500 uppercase tracking-wide">
+            <th class="text-left px-4 py-3 font-medium sticky left-0 bg-card-2/50 min-w-[130px]">Date</th>
+            {columns.map((c, ci) => (
+              <th class="text-right px-3 py-3 font-medium relative group min-w-[130px]" data-col={c.key}>
+                <div class="flex items-center justify-end gap-1">
+                  <!-- Rename on click -->
+                  <span
+                    class="col-label-display cursor-pointer hover:text-gray-200 transition-colors"
+                    data-key={c.key}
+                    data-label={c.label}
+                    title="Click to rename"
+                  >{c.label}</span>
+                  <!-- Delete -->
+                  <form method="POST" class="inline-flex opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
+                    <input type="hidden" name="_action" value="delete_column" />
+                    <input type="hidden" name="col_key" value={c.key} />
+                    <button type="submit" onclick={`return confirm('Remove column "${c.label}"?')`}
+                      class="text-gray-700 hover:text-danger text-base leading-none px-0.5 transition-colors">×</button>
+                  </form>
+                </div>
+                <!-- Rename form (hidden) -->
+                <form method="POST" class="col-rename-form hidden mt-1 flex gap-1" data-key={c.key}>
+                  <input type="hidden" name="_action" value="rename_column" />
                   <input type="hidden" name="col_key" value={c.key} />
-                  <button type="submit" onclick={`return confirm('Remove column ${c.label}? (Data preserved but hidden)')`}
-                    class="text-gray-700 hover:text-danger text-xs">×</button>
+                  <input type="text" name="col_label" value={c.label}
+                    class="col-rename-input w-full bg-card border border-accent/40 rounded px-1.5 py-0.5 text-xs text-gray-200 focus:outline-none text-left normal-case tracking-normal font-normal" />
+                  <button type="submit" class="text-accent text-xs font-bold">✓</button>
                 </form>
               </th>
             ))}
-            <th class="text-left px-3 py-2.5 font-medium min-w-[180px]">Notes</th>
+            <!-- Notes -->
+            <th class="text-left px-3 py-3 font-medium min-w-[160px]">Notes</th>
+            <!-- Add column "+" -->
+            <th class="px-2 py-3 w-10 text-center">
+              <button id="add-col-btn" class="text-gray-600 hover:text-accent text-lg leading-none transition-colors font-light" title="Add column">＋</button>
+            </th>
             <th class="w-8"></th>
           </tr>
+
+          <!-- Add-column inline form (hidden) -->
+          <tr id="add-col-row" class="hidden border-b border-accent/20 bg-accent/5">
+            <td class="px-4 py-2 text-xs text-gray-500 italic">New column:</td>
+            <td colspan={columns.length + 1} class="px-3 py-2">
+              <form method="POST" class="flex items-center gap-2 flex-wrap">
+                <input type="hidden" name="_action" value="add_column" />
+                <input type="text" name="col_key" required placeholder="key (no spaces)"
+                  class="bg-card border border-border rounded px-2.5 py-1.5 text-xs text-gray-200 focus:border-accent outline-none w-36" />
+                <input type="text" name="col_label" placeholder="Display label"
+                  class="bg-card border border-border rounded px-2.5 py-1.5 text-xs text-gray-200 focus:border-accent outline-none w-36" />
+                <button type="submit" class="bg-accent hover:bg-accent-dark text-white text-xs font-medium px-3 py-1.5 rounded transition-colors">Add</button>
+                <button type="button" id="cancel-col-btn" class="text-gray-600 hover:text-gray-300 text-xs px-2 py-1.5 transition-colors">Cancel</button>
+              </form>
+            </td>
+            <td></td>
+          </tr>
         </thead>
-        <tbody>
-          {(!entries || entries.length === 0) ? (
+
+        <!-- ── TBODY ── -->
+        <tbody id="report-tbody">
+          {(!entriesDesc || entriesDesc.length === 0) ? (
             <tr>
-              <td colspan={columns.length + 3} class="text-center text-gray-600 text-sm py-12">
-                No rows yet. Use the "+ New row" form above to add the first entry.
+              <td colspan={columns.length + 4} class="text-center text-gray-600 text-sm py-14">
+                No data yet — add the first row below.
               </td>
             </tr>
           ) : (
-            (entries as any[]).map(entry => (
-              <tr class="border-b border-border/40 hover:bg-card-2/30 transition-colors group">
-                <td class="px-4 py-2 text-gray-300 font-mono text-xs sticky left-0 bg-card group-hover:bg-card-2/30">
+            entriesDesc.map((entry: any) => (
+              <tr class="border-b border-border/40 hover:bg-card-2/20 transition-colors group" data-row-id={entry.id} data-date={entry.entry_date}>
+                <td class="px-4 py-1.5 text-gray-400 font-mono text-xs sticky left-0 bg-card group-hover:bg-card-2/20 whitespace-nowrap">
                   {formatDateDisplay(entry.entry_date, granularity)}
                 </td>
                 {columns.map(c => (
-                  <td class="px-3 py-1 text-right">
-                    <form method="POST" class="inline-block w-full">
+                  <td class="px-2 py-1 text-right">
+                    <form method="POST" class="w-full">
                       <input type="hidden" name="_action" value="update_cell" />
                       <input type="hidden" name="row_id" value={entry.id} />
                       <input type="hidden" name="col_key" value={c.key} />
-                      <input type="number" step="0.01" name="value" value={entry.values?.[c.key] ?? ''}
+                      <input type="number" step="0.01" name="value"
+                        value={entry.values?.[c.key] ?? ''}
                         onchange="this.form.submit()"
                         placeholder="—"
-                        class="w-full bg-transparent text-right text-sm text-gray-200 font-mono px-1 py-1 rounded hover:bg-card-2 focus:bg-card-2 focus:outline-none focus:ring-1 focus:ring-accent/40" />
+                        class="w-full bg-transparent text-right text-sm text-gray-200 font-mono px-2 py-1 rounded hover:bg-card-2 focus:bg-card-2 focus:outline-none focus:ring-1 focus:ring-accent/50 transition-colors" />
                     </form>
                   </td>
                 ))}
-                <td class="px-3 py-1">
-                  <form method="POST" class="inline-block w-full">
+                <td class="px-2 py-1">
+                  <form method="POST" class="w-full">
                     <input type="hidden" name="_action" value="update_notes" />
                     <input type="hidden" name="row_id" value={entry.id} />
                     <input type="text" name="notes" value={entry.notes ?? ''}
                       onchange="this.form.submit()"
                       placeholder="—"
-                      class="w-full bg-transparent text-sm text-gray-300 px-1 py-1 rounded hover:bg-card-2 focus:bg-card-2 focus:outline-none focus:ring-1 focus:ring-accent/40" />
+                      class="w-full bg-transparent text-sm text-gray-400 px-2 py-1 rounded hover:bg-card-2 focus:bg-card-2 focus:outline-none focus:ring-1 focus:ring-accent/50 transition-colors" />
                   </form>
                 </td>
-                <td class="px-2 py-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                  <form method="POST" class="inline-block">
+                <td class="px-1 w-10"></td>
+                <td class="px-2 py-1 w-8 opacity-0 group-hover:opacity-100 transition-opacity">
+                  <form method="POST">
                     <input type="hidden" name="_action" value="delete_row" />
                     <input type="hidden" name="row_id" value={entry.id} />
                     <button type="submit" onclick="return confirm('Delete this row?')"
-                      class="text-gray-700 hover:text-danger text-sm">✕</button>
+                      class="text-gray-700 hover:text-danger text-sm transition-colors">✕</button>
                   </form>
                 </td>
               </tr>
             ))
           )}
+
+          <!-- ── Add-row inline row ── -->
+          <tr class="border-t border-dashed border-border/60 bg-card-2/10 hover:bg-card-2/30 transition-colors" id="add-row-tr">
+            <td class="px-4 py-2">
+              <form method="POST" id="add-row-form" class="flex items-center gap-2">
+                <input type="hidden" name="_action" value="add_row" />
+                <input type="hidden" name="granularity" value={granularity} />
+                <span class="text-gray-600 text-xs shrink-0">+</span>
+                <input type="date" name="entry_date" required value={today}
+                  class="bg-card border border-border rounded px-2 py-1 text-xs text-gray-200 focus:border-accent outline-none" />
+              </form>
+            </td>
+            {columns.map(() => <td></td>)}
+            <td class="px-2 py-2">
+              <input type="text" name="notes" form="add-row-form" placeholder="Notes…"
+                class="w-full bg-transparent text-xs text-gray-500 px-1 py-1 rounded focus:bg-card-2 focus:outline-none focus:ring-1 focus:ring-accent/40" />
+            </td>
+            <td class="px-1 py-2" colspan="2">
+              <button type="submit" form="add-row-form"
+                class="bg-accent hover:bg-accent-dark text-white text-xs font-medium px-3 py-1 rounded transition-colors whitespace-nowrap">
+                + Add Row
+              </button>
+            </td>
+          </tr>
         </tbody>
-        {entries && entries.length > 0 && (
+
+        <!-- ── TFOOT ── -->
+        {entriesDesc && entriesDesc.length > 0 && (
           <tfoot>
-            <tr class="border-t-2 border-border bg-card-2/40 font-semibold">
-              <td class="px-4 py-2.5 text-xs text-gray-400 uppercase tracking-wide sticky left-0 bg-card-2/40">Total</td>
+            <tr class="border-t-2 border-border bg-card-2/50 font-semibold">
+              <td class="px-4 py-2.5 text-xs text-gray-400 uppercase tracking-wide sticky left-0 bg-card-2/50">Total</td>
               {columns.map(c => (
-                <td class="px-3 py-2.5 text-right font-mono text-gray-200">
-                  {totals[c.key].toLocaleString(undefined, { maximumFractionDigits: 2 })}
+                <td class="px-2 py-2.5 text-right font-mono text-sm text-gray-200">
+                  {totals[c.key] % 1 === 0
+                    ? totals[c.key].toLocaleString()
+                    : totals[c.key].toLocaleString(undefined, { maximumFractionDigits: 2 })}
                 </td>
               ))}
-              <td colspan="2"></td>
+              <td colspan="3"></td>
             </tr>
           </tfoot>
         )}
@@ -280,12 +378,145 @@ const dealAny = deal as any;
   </div>
 
   <p class="text-xs text-gray-700 mt-3">
-    💡 Tip: click a cell to edit, change auto-saves on blur. Hover columns to remove. Switch granularity at top.
+    💡 Click any cell to edit — auto-saves on blur. Click a column header to rename it. Hover row to delete.
   </p>
 </Layout>
 
-<script>
-  document.getElementById('toggle-col-form')?.addEventListener('click', () => {
-    document.getElementById('col-form')?.classList.toggle('hidden');
+<script define:vars={{ entriesJson, columnsJson, totalsJson, granStr, dealIdStr, buyerName, operatorName, dateFrom, dateTo }}>
+  const entries  = JSON.parse(entriesJson);
+  const columns  = JSON.parse(columnsJson);
+  const totals   = JSON.parse(totalsJson);
+
+  // ── Add column toggle ──────────────────────────────────────────────────
+  document.getElementById('add-col-btn')?.addEventListener('click', () => {
+    const row = document.getElementById('add-col-row');
+    row?.classList.toggle('hidden');
+    if (!row?.classList.contains('hidden')) row?.querySelector('input[name="col_key"]')?.focus();
+  });
+  document.getElementById('cancel-col-btn')?.addEventListener('click', () => {
+    document.getElementById('add-col-row')?.classList.add('hidden');
+  });
+
+  // ── Column rename (click label → show form) ────────────────────────────
+  document.querySelectorAll('.col-label-display').forEach(span => {
+    span.addEventListener('click', () => {
+      const key = span.dataset.key;
+      span.classList.add('hidden');
+      const form = document.querySelector(`.col-rename-form[data-key="${key}"]`);
+      form?.classList.remove('hidden');
+      form?.classList.add('flex');
+      form?.querySelector('input[name="col_label"]')?.select();
+    });
+  });
+  document.querySelectorAll('.col-rename-form').forEach(form => {
+    form.querySelector('.col-rename-input')?.addEventListener('keydown', e => {
+      if (e.key === 'Escape') {
+        const key = form.dataset.key;
+        form.classList.add('hidden');
+        form.classList.remove('flex');
+        document.querySelector(`.col-label-display[data-key="${key}"]`)?.classList.remove('hidden');
+      }
+    });
+  });
+
+  // ── SVG Chart ─────────────────────────────────────────────────────────
+  const chartSvg    = document.getElementById('chart-svg');
+  const chartLabels = document.getElementById('chart-labels');
+  const colSelect   = document.getElementById('chart-col-select');
+
+  function drawChart(colKey) {
+    if (!chartSvg || entries.length < 2) return;
+    const values = entries.map(e => Number(e.values?.[colKey] ?? 0));
+    const min = Math.min(...values);
+    const max = Math.max(...values);
+    const range = max - min || 1;
+    const W = 1000, H = 80, PAD = 8;
+    const pts = values.map((v, i) => {
+      const x = PAD + (i / (values.length - 1)) * (W - PAD * 2);
+      const y = PAD + (1 - (v - min) / range) * (H - PAD * 2);
+      return `${x},${y}`;
+    });
+    // Gradient fill
+    const fillPts = [`${PAD},${H}`, ...pts, `${W - PAD},${H}`].join(' ');
+    chartSvg.setAttribute('viewBox', `0 0 ${W} ${H}`);
+    chartSvg.innerHTML = `
+      <defs>
+        <linearGradient id="cg" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stop-color="#e11d48" stop-opacity="0.25"/>
+          <stop offset="100%" stop-color="#e11d48" stop-opacity="0"/>
+        </linearGradient>
+      </defs>
+      <polygon points="${fillPts}" fill="url(#cg)"/>
+      <polyline points="${pts.join(' ')}" fill="none" stroke="#e11d48" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+      ${pts.map((p, i) => `<circle cx="${p.split(',')[0]}" cy="${p.split(',')[1]}" r="3" fill="#e11d48" opacity="0.7"/>`).join('')}
+    `;
+    // Labels (show max 6 dates)
+    if (chartLabels) {
+      const step = Math.max(1, Math.floor(entries.length / 6));
+      const labelItems = entries
+        .filter((_, i) => i === 0 || i === entries.length - 1 || i % step === 0)
+        .map(e => {
+          const d = new Date(e.date + 'T00:00:00');
+          return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+        });
+      chartLabels.innerHTML = labelItems.map(l => `<span>${l}</span>`).join('');
+    }
+  }
+
+  if (colSelect) {
+    drawChart(colSelect.value);
+    colSelect.addEventListener('change', () => drawChart(colSelect.value));
+  }
+
+  // ── Export CSV ────────────────────────────────────────────────────────
+  document.getElementById('export-csv')?.addEventListener('click', () => {
+    const colKeys   = columns.map(c => c.key);
+    const colLabels = columns.map(c => c.label);
+    const rows      = [...document.querySelectorAll('#report-tbody tr[data-row-id]')];
+
+    // Build rows from DOM (captured current values)
+    const dataRows = rows.map(tr => {
+      const date = tr.dataset.date ?? '';
+      const cells = colKeys.map(key => {
+        const input = tr.querySelector(`input[name="value"][form*="${tr.dataset.rowId}"], form input[name="value"]`);
+        // Fallback to entry data
+        const entry = entries.find(e => e.date === date);
+        return entry ? (entry.values?.[key] ?? '') : '';
+      });
+      const notesInput = tr.querySelector('input[name="notes"]');
+      const notes = notesInput ? notesInput.value : '';
+      return [date, ...cells, notes];
+    });
+
+    // Build from entries array (more reliable)
+    const csvRows = [
+      ['Date', ...colLabels, 'Notes'],
+      ...entries.map(e => [
+        e.date,
+        ...colKeys.map(k => e.values?.[k] ?? ''),
+        ''
+      ]),
+      ['TOTAL', ...colKeys.map(k => totals[k] ?? 0), ''],
+    ];
+
+    const csvContent = csvRows
+      .map(row => row.map(v => `"${String(v).replace(/"/g, '""')}"`).join(','))
+      .join('\n');
+
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    const period = dateFrom && dateTo ? `_${dateFrom}_to_${dateTo}` : `_${granStr}`;
+    a.href = url;
+    a.download = `report_${buyerName.replace(/\s+/g,'_')}_${operatorName.replace(/\s+/g,'_')}${period}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  });
+
+  // ── Auto-apply date filter on change ──────────────────────────────────
+  document.querySelectorAll('#date-filter-form input[type="date"]').forEach(input => {
+    input.addEventListener('change', () => {
+      document.getElementById('date-filter-form')?.requestSubmit();
+    });
   });
 </script>
