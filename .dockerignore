@@ -1,0 +1,10 @@
+node_modules
+dist
+.astro
+.vercel
+.env
+.env.*
+.git
+.claude
+*.pptx
+.DS_Store

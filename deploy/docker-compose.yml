@@ -1,0 +1,74 @@
+# BizDev на нашому сервері (таск 09620367): база, PostgREST і портал.
+# Секрети — лише в /opt/bizdev/.env на сервері (chmod 600), у git їх немає:
+#   POSTGRES_PASSWORD    — власник бази bizdev
+#   BIZDEV_API_PASSWORD  — логін PostgREST (роль bizdev_authenticator)
+name: bizdev
+
+services:
+  bizdev-db:
+    image: pgvector/pgvector:pg16
+    container_name: bizdev-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: bizdev
+      POSTGRES_USER: bizdev
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?}
+      BIZDEV_API_PASSWORD: ${BIZDEV_API_PASSWORD:?}
+    volumes:
+      - bizdev_pgdata:/var/lib/postgresql/data
+      - ./initdb:/docker-entrypoint-initdb.d:ro
+    networks: [bizdev-net]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U bizdev -d bizdev"]
+      interval: 10s
+      retries: 6
+
+  bizdev-rest:
+    image: postgrest/postgrest:v14.12
+    container_name: bizdev-rest
+    restart: unless-stopped
+    environment:
+      PGRST_DB_URI: postgres://bizdev_authenticator:${BIZDEV_API_PASSWORD:?}@bizdev-db:5432/bizdev
+      PGRST_DB_SCHEMAS: public
+      PGRST_DB_ANON_ROLE: bizdev_api
+      PGRST_DB_CHANNEL_ENABLED: "true"
+      # warn — пише й 4xx: сторінки ігнорують помилки запитів, тож без цього
+      # запит до колонки, якої немає, пройшов би непомітно.
+      PGRST_LOG_LEVEL: warn
+    depends_on:
+      bizdev-db: { condition: service_healthy }
+    networks: [bizdev-net]
+
+  bizdev-portal:
+    build: ./src
+    image: bizdev-portal:local
+    container_name: bizdev-portal
+    restart: unless-stopped
+    environment:
+      BIZDEV_REST_URL: http://bizdev-rest:3000
+      BIZDEV_FILES_DIR: /data/files
+    volumes:
+      - bizdev_files:/data/files
+    depends_on: [bizdev-rest]
+    networks: [bizdev-net, coolify]
+    labels:
+      traefik.enable: "true"
+      traefik.docker.network: coolify
+      traefik.http.middlewares.bizdev-https-redirect.redirectscheme.scheme: https
+      traefik.http.routers.bizdev-http.entrypoints: http
+      traefik.http.routers.bizdev-http.rule: Host(`bizdev.advantage-agency.duckdns.org`)
+      traefik.http.routers.bizdev-http.middlewares: bizdev-https-redirect
+      traefik.http.routers.bizdev.entrypoints: https
+      traefik.http.routers.bizdev.rule: Host(`bizdev.advantage-agency.duckdns.org`)
+      traefik.http.routers.bizdev.tls: "true"
+      traefik.http.routers.bizdev.tls.certresolver: letsencrypt
+      traefik.http.services.bizdev.loadbalancer.server.port: "4321"
+
+volumes:
+  bizdev_pgdata:
+  bizdev_files:
+
+networks:
+  bizdev-net:
+  coolify:
+    external: true
