@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!-- Щогодини забирати бекапи бази BizDev на Mac Марка. Встановлення — README.md поруч.
+     __HOME__ замінюється на домашню теку під час встановлення. -->
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>co.advantage-agency.bizdev-backup-pull</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/bin/bash</string>
+    <string>__HOME__/Library/Application Support/advantage-db-backup-bizdev/pull-bizdev-backups.sh</string>
+  </array>
+  <key>StartInterval</key>
+  <integer>3600</integer>
+  <key>RunAtLoad</key>
+  <true/>
+  <key>StandardOutPath</key>
+  <string>__HOME__/Library/Logs/advantage-bizdev-backup-pull.log</string>
+  <key>StandardErrorPath</key>
+  <string>__HOME__/Library/Logs/advantage-bizdev-backup-pull.log</string>
+</dict>
+</plist>
