@@ -11,7 +11,9 @@ const B58 = '1-9A-HJ-NP-Za-km-z';
 
 // \b у JS не бачить кирилиці, тому межі слова — через \p{L}\p{N}.
 const kw = (words) => `(?<![\\p{L}\\p{N}_])(?:${words})(?![\\p{L}\\p{N}_])`;
-const PASSWORD_WORDS = kw('пароль|паролі|пароля|password|passwd|pass|pwd|пасс|пас');
+const PASSWORD_KW = new RegExp(kw('пароль|паролі|пароля|паролем|password|passwd|pass|pwd|пасс|пас'), 'giu');
+// «доступ: admin / qwerty123» — тут пароль іде парою після логіна.
+const ACCESS_KW = new RegExp(kw('доступ|доступи|доступу|доступів|access|creds|credentials'), 'giu');
 const CODE_WORDS = kw('код|коду|кода|коди|code|otp|2fa|pin|пін|sms|смс|verification|підтвердження');
 
 /** Номер картки: сума Luhn. */
@@ -44,14 +46,73 @@ const RULES = [
 
   // Логін:пароль у посиланні — https://user:pass@host.
   { kind: 'password', label: '[пароль]', re: /(?<=:\/\/[^\s:/@]+:)[^\s@/]+(?=@)/g },
-  // Є двокрапка чи «=» в тому ж рядку («пароль від кабінету: abc») — маскуємо перше слово після неї.
-  { kind: 'password', label: '[пароль]', re: new RegExp(`(?<=${PASSWORD_WORDS}[^\\n:=]{0,40}[:=]\\s*)[^\\s,;]{3,}`, 'giu') },
-  // Без двокрапки — перше слово одразу після ключового («pass abc123», «пароль — abc»).
-  { kind: 'password', label: '[пароль]', re: new RegExp(`(?<=${PASSWORD_WORDS}\\s*(?:[—–-]\\s*)?)(?=[^\\s:=,;])(?!\\[)[^\\s,;]{3,}`, 'giu') },
 
   // Код підтвердження поруч зі словом: «код 12345», «code: 123 456», «2FA 987654».
   { kind: 'code', label: '[код]', re: new RegExp(`(?<=${CODE_WORDS}[^\\d\\n]{0,20})\\d(?:[ -]?\\d){3,7}(?!\\d)`, 'giu') },
 ];
+
+// ── Паролі ────────────────────────────────────────────────────────────────────────────
+// Пароль рідко стоїть одразу після слова «пароль»: «пароль від кабінету Qwerty123»,
+// «the password is Hunter22», «доступ: admin / qwerty123». Тому дивимось на кілька слів
+// після ключового в тому ж рядку і маскуємо:
+//  - слово після роздільника («:», «=», «—», «is», «це»; для «доступ» — після «/»);
+//  - кожне слово, схоже на пароль (цифри, спецсимволи, Великі всередині слова);
+//  - якщо такого немає — перше слово, що не є службовим («pass hunter», «пароль від кабінету Qwerty»).
+// Краще замаскувати зайве слово, ніж залишити пароль.
+const WINDOW = 8;
+const SEP = new Set([':', '=', '—', '–', '-', '/', 'is', 'це', 'є']);
+const STOP = new Set([
+  'від', 'для', 'до', 'на', 'у', 'в', 'з', 'із', 'та', 'і', 'й', 'мій', 'моя', 'мого', 'твій', 'ваш', 'наш', 'новий', 'старий', 'такий',
+  'кабінет', 'кабінету', 'кабінета', 'акаунт', 'акаунта', 'акаунту', 'аккаунт', 'аккаунта', 'аккаунту', 'профілю', 'панелі', 'панель',
+  'сайту', 'сайт', 'пошти', 'пошта', 'входу', 'адмінки', 'трекера', 'трекер',
+  'the', 'my', 'your', 'our', 'new', 'old', 'for', 'to', 'of', 'from', 'on', 'in', 'account', 'cabinet', 'panel', 'email', 'mail', 'login',
+]);
+const looksSecret = (w) => w.length >= 4 && (/\d/.test(w) || /[!@#$%^&*_+=~?]/.test(w) || /\p{L}\p{Lu}/u.test(w));
+
+function maskAfter(rest, mode) {
+  const parts = rest.split(/(\s+)/);
+  const words = []; // { i, core }
+  let force = /^\s*[:=—–-]/.test(rest) && mode === 'password';
+  const marks = new Set();
+  for (let i = 0; i < parts.length && words.length < WINDOW; i++) {
+    if (!parts[i] || /^\s+$/.test(parts[i])) continue;
+    const lead = parts[i].match(/^[:=—–\/-]+/)?.[0] ?? '';
+    if (lead === parts[i]) { force = mode === 'password' || lead.includes('/'); continue; } // окремий роздільник
+    if (lead && (mode === 'password' || lead.includes('/'))) force = true;
+    const t = parts[i].slice(lead.length);
+    const tail = t.match(/[,;:=]+$/)?.[0] ?? '';
+    const core = t.slice(0, t.length - tail.length);
+    if (!core || /^\[.*\]$/.test(core)) { if (/[:=]/.test(tail) && mode === 'password') force = true; continue; }
+    if (SEP.has(core.toLowerCase())) { force = mode === 'password' || core === '/'; continue; }
+    words.push({ i, core });
+    if (force || looksSecret(core)) marks.add(i);
+    force = /[:=]/.test(tail) && mode === 'password';
+  }
+  if (!marks.size && mode === 'password' && !/^[,.!?]/.test(rest.trimStart())) {
+    const first = words.find((w) => !STOP.has(w.core.toLowerCase()) && w.core.length >= 3);
+    if (first) marks.add(first.i);
+  }
+  for (const i of marks) {
+    const lead = parts[i].match(/^[:=—–\/-]+/)?.[0] ?? '';
+    const tail = parts[i].slice(lead.length).match(/[,;:=]+$/)?.[0] ?? '';
+    parts[i] = lead + '[пароль]' + tail;
+  }
+  return { text: parts.join(''), hit: marks.size > 0 };
+}
+
+function maskPasswords(text, kinds) {
+  return text.split('\n').map((line) => {
+    for (const [re, mode] of [[PASSWORD_KW, 'password'], [ACCESS_KW, 'access']]) {
+      re.lastIndex = 0;
+      const m = re.exec(line);
+      if (!m) continue;
+      const at = m.index + m[0].length;
+      const r = maskAfter(line.slice(at), mode);
+      if (r.hit) { kinds.add('password'); line = line.slice(0, at) + r.text; }
+    }
+    return line;
+  }).join('\n');
+}
 
 /** Повідомлення лише з коду: «48213», «123 456». Круглі суми (10000) не чіпаємо. */
 const BARE_CODE = /^\s*(\d(?:[ -]?\d){4,7})\s*$/;
@@ -78,6 +139,7 @@ export function mask(text) {
   for (const r of RULES) {
     out = out.replace(r.re, () => { kinds.add(r.kind); return r.label; });
   }
+  out = maskPasswords(out, kinds);
 
   const bare = BARE_CODE.exec(out);
   if (bare && !/000$/.test(bare[1].replace(/[ -]/g, ''))) {

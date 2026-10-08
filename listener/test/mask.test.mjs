@@ -39,6 +39,19 @@ test('паролі', () => {
   hidden('password=Zx9_k', 'Zx9_k', 'password');
   hidden('Пароль — abc12345', 'abc12345', 'password');
   hidden('https://buyer:Tr0ub4dor@panel.example.com/login', 'Tr0ub4dor', 'password');
+  // Пароль не одразу після ключового слова (повернення судді, коло 1).
+  hidden('пароль від кабінету Qwerty123', 'Qwerty123', 'password');
+  hidden('пароль від акаунта Qwerty123', 'Qwerty123', 'password');
+  hidden('Пароль від кабінету — S3cret_pass', 'S3cret_pass', 'password');
+  hidden('the password is Hunter22', 'Hunter22', 'password');
+  hidden('доступ: admin / qwerty123', 'qwerty123', 'password');
+  hidden('доступ: admin / qwerty', 'qwerty', 'password');
+  hidden('пароль від кабінету Qwerty', 'Qwerty', 'password');
+  hidden('pass qwerty', 'qwerty', 'password');
+  const eq = hidden('password=Zx9_k', 'Zx9_k', 'password');
+  assert.equal(eq.text, 'password=[пароль]');
+  const pair = mask('доступ: admin / qwerty123');
+  assert.ok(pair.text.includes('admin'), 'логін лишається');
   const r = hidden('login: team1\npass: kL9#mm2', 'kL9#mm2', 'password');
   assert.ok(r.text.includes('team1'), 'логін не пароль, лишається');
 });
@@ -57,6 +70,8 @@ test('звичайна мова й цифри угод не чіпаються',
   intact('звіт за 07.10.2026, spend $15 000, 120 FTD');
   intact('офер https://advantage-agency.co/offers/brazil-2026 ок?');
   intact('скинь новий код трекінгу на лендинг');
+  intact('забув пароль, скинь новий будь ласка');
+  intact('доступ до кабінету дам завтра');
   intact('телефон +380 67 123 45 67'); // 12 цифр — не картка
   intact('кампанія 23847562938475 запущена'); // 14 цифр без Luhn
 });
