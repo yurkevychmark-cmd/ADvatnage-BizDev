@@ -8,4 +8,4 @@ rsync -az --delete --exclude-from=.dockerignore ./ "$HOST:/opt/bizdev/src/"
 rsync -az deploy/docker-compose.yml "$HOST:/opt/bizdev/docker-compose.yml"
 rsync -az --delete deploy/initdb/ "$HOST:/opt/bizdev/initdb/"
 # --pull=false: базові образи вже на сервері (ліміт Docker Hub на анонімні завантаження).
-ssh "$HOST" 'cd /opt/bizdev && docker compose build --pull=false bizdev-portal && docker compose up -d'
+ssh "$HOST" 'cd /opt/bizdev && docker compose build --pull=false bizdev-portal bizdev-listener && docker compose up -d'

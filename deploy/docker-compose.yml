@@ -2,6 +2,8 @@
 # Секрети — лише в /opt/bizdev/.env на сервері (chmod 600), у git їх немає:
 #   POSTGRES_PASSWORD    — власник бази bizdev
 #   BIZDEV_API_PASSWORD  — логін PostgREST (роль bizdev_authenticator)
+#   BIZDEV_LISTENER_PASSWORD — логін слухача Telegram (роль bizdev_listener)
+# Несекретне там же: BIZDEV_TG_ALLOWED_CHATS — id дозволених чатів через кому.
 name: bizdev
 
 services:
@@ -14,6 +16,7 @@ services:
       POSTGRES_USER: bizdev
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?}
       BIZDEV_API_PASSWORD: ${BIZDEV_API_PASSWORD:?}
+      BIZDEV_LISTENER_PASSWORD: ${BIZDEV_LISTENER_PASSWORD:?}
     volumes:
       - bizdev_pgdata:/var/lib/postgresql/data
       - ./initdb:/docker-entrypoint-initdb.d:ro
@@ -47,6 +50,7 @@ services:
     environment:
       BIZDEV_REST_URL: http://bizdev-rest:3000
       BIZDEV_FILES_DIR: /data/files
+      BIZDEV_LISTENER_URL: http://bizdev-listener:8080
     volumes:
       - bizdev_files:/data/files
     depends_on: [bizdev-rest]
@@ -64,9 +68,26 @@ services:
       traefik.http.routers.bizdev.tls.certresolver: letsencrypt
       traefik.http.services.bizdev.loadbalancer.server.port: "4321"
 
+  # Слухач Telegram (таск 140108c8): лише внутрішня мережа, назовні нічого не відкрито.
+  # Сесія акаунта, ключ застосунку й токен пульта — на томі bizdev_tg, поза git і базою.
+  bizdev-listener:
+    build: ./src/listener
+    image: bizdev-listener:local
+    container_name: bizdev-listener
+    restart: unless-stopped
+    environment:
+      BIZDEV_LISTENER_PASSWORD: ${BIZDEV_LISTENER_PASSWORD:?}
+      BIZDEV_TG_ALLOWED_CHATS: ${BIZDEV_TG_ALLOWED_CHATS:-}
+    volumes:
+      - bizdev_tg:/data
+    depends_on:
+      bizdev-db: { condition: service_healthy }
+    networks: [bizdev-net]
+
 volumes:
   bizdev_pgdata:
   bizdev_files:
+  bizdev_tg:
 
 networks:
   bizdev-net:

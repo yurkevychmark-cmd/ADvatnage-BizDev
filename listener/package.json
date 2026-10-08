@@ -1,0 +1,14 @@
+{
+  "name": "bizdev-listener",
+  "private": true,
+  "type": "module",
+  "version": "1.0.0",
+  "scripts": {
+    "start": "node src/main.mjs",
+    "test": "node --test test/*.test.mjs"
+  },
+  "dependencies": {
+    "pg": "8.23.1",
+    "telegram": "2.26.22"
+  }
+}

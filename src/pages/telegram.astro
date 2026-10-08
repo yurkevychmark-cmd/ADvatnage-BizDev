@@ -1,0 +1,181 @@
+---
+import Layout from '../components/Layout.astro';
+import { listener, type ListenerStatus } from '../lib/listener';
+
+// Підключення робочого Telegram-акаунта (таск 140108c8, BizDev-агент · 2/8).
+// Номер, код і пароль 2FA вводить сам власник акаунта — тут, на сторінці за логіном.
+// Вони йдуть у слухач і далі в Telegram; ніде не зберігаються й не пишуться в лог.
+let status: ListenerStatus | null = null;
+let error = '';
+let unavailable = false;
+
+const ACTIONS: Record<string, (f: FormData) => [string, Record<string, unknown>]> = {
+  start: (f) => ['/login/start', { apiId: f.get('api_id'), apiHash: f.get('api_hash'), phone: f.get('phone') }],
+  code: (f) => ['/login/code', { code: f.get('code') }],
+  password: (f) => ['/login/password', { password: f.get('password') }],
+  cancel: () => ['/login/cancel', {}],
+  logout: () => ['/logout', {}],
+  pult: (f) => ['/pult', { token: f.get('token') }],
+  pult_forget: () => ['/pult/forget', {}],
+};
+
+try {
+  if (Astro.request.method === 'POST') {
+    const form = await Astro.request.formData();
+    const action = ACTIONS[String(form.get('action'))];
+    if (action) {
+      const [path, body] = action(form);
+      try {
+        status = await listener(path, body);
+      } catch (e: any) {
+        if (!e.userFacing) throw e;
+        error = e.message;
+      }
+    }
+  }
+  status ??= await listener('/status');
+} catch (e) {
+  console.error('[telegram] listener', e);
+  unavailable = true;
+}
+
+const step = status?.step;
+const waiting = step === 'sending_code' || step === 'checking';
+const fmt = (s?: string | null) => (s ? new Date(s).toLocaleString('uk-UA', { timeZone: 'Europe/Kyiv', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) : '—');
+const input = 'w-full bg-card-2 border border-border rounded-lg px-4 py-2.5 text-sm text-gray-200 placeholder-gray-600 focus:border-accent outline-none';
+const primary = 'bg-accent hover:bg-accent-dark text-white text-sm font-medium rounded-lg px-4 py-2.5 transition-colors';
+const ghost = 'text-sm text-gray-400 hover:text-gray-200 border border-border rounded-lg px-4 py-2.5 transition-colors';
+---
+
+<Layout title="Telegram">
+  {waiting && <meta http-equiv="refresh" content="3" />}
+  <div class="mb-8">
+    <h1 class="text-2xl font-bold">Telegram</h1>
+    <p class="text-gray-500 text-sm mt-1">Work account for the BizDev agent. It only reads allowed chats and never sends anything.</p>
+  </div>
+
+  {unavailable ? (
+    <div class="bg-danger/10 border border-danger/30 text-danger text-sm rounded-lg px-4 py-3 max-w-2xl">
+      The Telegram listener is not responding. Partner data is not affected; try again in a minute.
+    </div>
+  ) : status && (
+    <div class="grid gap-6 max-w-2xl">
+
+      <section class="bg-card border border-border rounded-xl p-6">
+        <h2 class="text-sm font-semibold text-gray-300 uppercase tracking-wide mb-4">Work account</h2>
+
+        {(error || status.error) && (
+          <div class="mb-4 text-sm text-red-300 bg-red-500/10 border border-red-500/30 rounded-lg px-3 py-2">{error || status.error}</div>
+        )}
+
+        {step === 'connected' && status.account && (
+          <div class="space-y-3">
+            <p class="text-sm"><span class="inline-block w-2 h-2 rounded-full bg-success mr-2"></span>
+              Connected: <span class="text-white">{status.account.name}</span>
+              {status.account.username && <span class="text-gray-400"> @{status.account.username}</span>}
+              {status.account.phoneTail && <span class="text-gray-500"> · {status.account.phoneTail}</span>}
+            </p>
+            <p class="text-xs text-gray-500">Since {fmt(status.account.since)} · last message saved {fmt(status.lastMessageAt)}</p>
+            <form method="POST" onsubmit="return confirm('Disconnect the work account? The agent will stop reading chats until it is connected again.')">
+              <input type="hidden" name="action" value="logout" />
+              <button class={ghost}>Disconnect</button>
+            </form>
+          </div>
+        )}
+
+        {waiting && <p class="text-sm text-gray-400">Waiting for Telegram…</p>}
+
+        {(step === 'disconnected' || step === 'error') && (
+          <form method="POST" class="space-y-3" autocomplete="off">
+            <input type="hidden" name="action" value="start" />
+            <p class="text-xs text-gray-500">
+              api_id and api_hash: my.telegram.org → sign in with the work account's number → API development tools.
+            </p>
+            <div class="grid grid-cols-3 gap-3">
+              <label class="block col-span-1"><span class="block text-xs text-gray-500 mb-1">api_id</span>
+                <input name="api_id" required inputmode="numeric" class={input} /></label>
+              <label class="block col-span-2"><span class="block text-xs text-gray-500 mb-1">api_hash</span>
+                <input name="api_hash" required spellcheck="false" class={input} /></label>
+            </div>
+            <label class="block"><span class="block text-xs text-gray-500 mb-1">Phone number of the work account</span>
+              <input name="phone" required type="tel" placeholder="+380…" class={input} /></label>
+            <button class={primary}>Send code</button>
+          </form>
+        )}
+
+        {step === 'need_code' && (
+          <form method="POST" class="space-y-3" autocomplete="off">
+            <p class="text-sm text-gray-400">Telegram sent a login code to the work account — in the Telegram app (or by SMS).</p>
+            <label class="block"><span class="block text-xs text-gray-500 mb-1">Code</span>
+              <input name="code" required autofocus inputmode="numeric" autocomplete="one-time-code" class={input} /></label>
+            <div class="flex gap-3">
+              <button class={primary} name="action" value="code">Confirm</button>
+              <button class={ghost} name="action" value="cancel" formnovalidate>Cancel</button>
+            </div>
+          </form>
+        )}
+
+        {step === 'need_password' && (
+          <form method="POST" class="space-y-3">
+            <p class="text-sm text-gray-400">This account has two-step verification.{status.hint && <span class="text-gray-500"> Hint: {status.hint}</span>}</p>
+            <label class="block"><span class="block text-xs text-gray-500 mb-1">2FA password</span>
+              <input name="password" type="password" required autofocus autocomplete="current-password" class={input} /></label>
+            <div class="flex gap-3">
+              <button class={primary} name="action" value="password">Confirm</button>
+              <button class={ghost} name="action" value="cancel" formnovalidate>Cancel</button>
+            </div>
+          </form>
+        )}
+      </section>
+
+      <section class="bg-card border border-border rounded-xl p-6">
+        <h2 class="text-sm font-semibold text-gray-300 uppercase tracking-wide mb-4">Control bot</h2>
+        {!status.pult.configured ? (
+          <form method="POST" class="space-y-3" autocomplete="off">
+            <input type="hidden" name="action" value="pult" />
+            <p class="text-xs text-gray-500">Create a bot with @BotFather (/newbot) and paste its token. The agent reports to you there.</p>
+            <label class="block"><span class="block text-xs text-gray-500 mb-1">Bot token</span>
+              <input name="token" required spellcheck="false" class={input} /></label>
+            <button class={primary}>Save</button>
+          </form>
+        ) : !status.pult.bound ? (
+          <div class="space-y-3">
+            <p class="text-sm text-gray-400">Bot @{status.pult.botUsername} is saved. Link it to your Telegram:</p>
+            <a href={`https://t.me/${status.pult.botUsername}?start=${status.pult.bindCode}`} target="_blank" rel="noopener" class={`${primary} inline-block`}>Open @{status.pult.botUsername} and press Start</a>
+            <p class="text-xs text-gray-500">Or send it <span class="font-mono text-gray-300">/start {status.pult.bindCode}</span>. Then reload this page.</p>
+          </div>
+        ) : (
+          <div class="flex items-center justify-between gap-3">
+            <p class="text-sm"><span class="inline-block w-2 h-2 rounded-full bg-success mr-2"></span>Linked: @{status.pult.botUsername}</p>
+            <form method="POST" onsubmit="return confirm('Forget this bot? You will need to paste the token again.')">
+              <input type="hidden" name="action" value="pult_forget" />
+              <button class={ghost}>Forget</button>
+            </form>
+          </div>
+        )}
+      </section>
+
+      <section class="bg-card border border-border rounded-xl p-6">
+        <h2 class="text-sm font-semibold text-gray-300 uppercase tracking-wide mb-4">Allowed chats</h2>
+        {status.allowed.length === 0 ? (
+          <p class="text-sm text-gray-500">No chats are allowed yet — the agent reads nothing. For now the list is set on the server; later chats are linked from partner cards.</p>
+        ) : (
+          <div class="overflow-x-auto">
+            <table class="w-full text-sm">
+              <thead><tr class="text-left text-xs text-gray-500 uppercase"><th class="py-2 pr-4">Chat</th><th class="py-2 pr-4">Messages</th><th class="py-2">Last</th></tr></thead>
+              <tbody>
+                {status.allowed.map((c) => (
+                  <tr class="border-t border-border">
+                    <td class="py-2 pr-4">{c.title ?? <span class="text-gray-500">not seen yet</span>} <span class="text-xs text-gray-600 font-mono">{c.id}</span></td>
+                    <td class="py-2 pr-4">{c.messages}</td>
+                    <td class="py-2 text-gray-400">{fmt(c.last_at)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </section>
+    </div>
+  )}
+</Layout>
