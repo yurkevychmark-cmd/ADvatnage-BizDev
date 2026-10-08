@@ -5,11 +5,13 @@
 const url = typeof process !== 'undefined' ? process.env.BIZDEV_LISTENER_URL : undefined;
 
 export interface ListenerStatus {
-  step: 'disconnected' | 'sending_code' | 'need_code' | 'checking' | 'need_password' | 'connected' | 'error';
+  step: 'disconnected' | 'sending_code' | 'need_code' | 'need_qr' | 'checking' | 'need_password' | 'connected' | 'error';
   account: { id: string; username: string | null; name: string; phoneTail: string | null; since: string } | null;
   error: string | null;
   hint: string | null;
   code: { via: string | null; next: string | null } | null;
+  /** SVG з QR для входу — лише поки step === 'need_qr'. */
+  qr: string | null;
   lastMessageAt: string | null;
   allowed: { id: string; title: string | null; kind?: string; messages: number; last_at?: string | null }[];
   pult: { configured: boolean; botUsername?: string; bound?: boolean; bindCode?: string | null };

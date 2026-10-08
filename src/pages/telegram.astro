@@ -11,6 +11,7 @@ let errorIn: 'account' | 'pult' = 'account';
 let unavailable = false;
 
 const ACTIONS: Record<string, (f: FormData) => [string, Record<string, unknown>]> = {
+  qr: (f) => ['/login/qr', { apiId: f.get('api_id'), apiHash: f.get('api_hash') }],
   start: (f) => ['/login/start', { apiId: f.get('api_id'), apiHash: f.get('api_hash'), phone: f.get('phone') }],
   code: (f) => ['/login/code', { code: f.get('code') }],
   password: (f) => ['/login/password', { password: f.get('password') }],
@@ -66,6 +67,7 @@ const via = status?.code?.via ? (VIA[status.code.via] ?? `in a way Telegram call
 const nextLabel = status?.code?.next ? (NEXT[status.code.next] ?? 'Send the code another way') : null;
 const emailRequired = status?.code?.via === 'auth.SentCodeTypeSetUpEmailRequired';
 const waiting = step === 'sending_code' || step === 'checking';
+const refreshEvery = waiting ? 3 : step === 'need_qr' ? 5 : 0;
 const fmt = (s?: string | null) => (s ? new Date(s).toLocaleString('uk-UA', { timeZone: 'Europe/Kyiv', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) : '—');
 const input = 'w-full bg-card-2 border border-border rounded-lg px-4 py-2.5 text-sm text-gray-200 placeholder-gray-600 focus:border-accent outline-none';
 const primary = 'bg-accent hover:bg-accent-dark text-white text-sm font-medium rounded-lg px-4 py-2.5 transition-colors';
@@ -73,7 +75,7 @@ const ghost = 'text-sm text-gray-400 hover:text-gray-200 border border-border ro
 ---
 
 <Layout title="Telegram">
-  {waiting && <meta http-equiv="refresh" content="3" />}
+  {refreshEvery > 0 && <meta http-equiv="refresh" content={String(refreshEvery)} />}
   <div class="mb-8">
     <h1 class="text-2xl font-bold">Telegram</h1>
     <p class="text-gray-500 text-sm mt-1">Work account for the BizDev agent. It only reads allowed chats and never sends anything.</p>
@@ -112,7 +114,6 @@ const ghost = 'text-sm text-gray-400 hover:text-gray-200 border border-border ro
 
         {(step === 'disconnected' || step === 'error') && (
           <form method="POST" class="space-y-3" autocomplete="off">
-            <input type="hidden" name="action" value="start" />
             <p class="text-xs text-gray-500">
               api_id and api_hash: my.telegram.org → sign in with the work account's number → API development tools.
             </p>
@@ -122,9 +123,25 @@ const ghost = 'text-sm text-gray-400 hover:text-gray-200 border border-border ro
               <label class="block col-span-2"><span class="block text-xs text-gray-500 mb-1">api_hash</span>
                 <input name="api_hash" required spellcheck="false" class={input} /></label>
             </div>
-            <label class="block"><span class="block text-xs text-gray-500 mb-1">Phone number of the work account</span>
-              <input name="phone" required type="tel" placeholder="+380…" class={input} /></label>
-            <button class={primary}>Send code</button>
+            <button class={primary} name="action" value="qr">Sign in with QR code</button>
+            <p class="text-xs text-gray-500">No SMS needed: you scan the QR with the phone where the work account is open.</p>
+            <details class="pt-2">
+              <summary class="text-xs text-gray-500 cursor-pointer">Or sign in with a login code</summary>
+              <div class="space-y-3 pt-3">
+                <label class="block"><span class="block text-xs text-gray-500 mb-1">Phone number of the work account</span>
+                  <input name="phone" type="tel" placeholder="+380…" class={input} /></label>
+                <button class={ghost} name="action" value="start">Send code</button>
+              </div>
+            </details>
+          </form>
+        )}
+
+        {step === 'need_qr' && status.qr && (
+          <form method="POST" class="space-y-4">
+            <p class="text-sm text-gray-400">On the phone with the work account: Telegram → Settings → Devices → <span class="text-gray-200">Link Desktop Device</span>, then scan this code.</p>
+            <div class="bg-white rounded-lg p-3 w-56 h-56" set:html={status.qr} />
+            <p class="text-xs text-gray-500">The code refreshes by itself every 30 seconds. After the scan this page continues on its own.</p>
+            <button class={ghost} name="action" value="cancel" formnovalidate>Cancel</button>
           </form>
         )}
 

@@ -12,6 +12,7 @@ import { TelegramClient, Api, utils } from 'telegram';
 import { StringSession } from 'telegram/sessions/index.js';
 import { NewMessage } from 'telegram/events/index.js';
 import { EditedMessage } from 'telegram/events/EditedMessage.js';
+import QRCode from 'qrcode';
 import { makeReadOnly } from './guard.mjs';
 import * as store from './store.mjs';
 import { readJson, writeJson, removeFile } from './files.mjs';
@@ -25,7 +26,7 @@ const CATCHUP_MS = 2 * 60_000;
 const SESSION_FILE = 'tg-session.json';
 const PORT = 8080;
 
-/** @type {'disconnected'|'sending_code'|'need_code'|'checking'|'need_password'|'connected'|'error'} */
+/** @type {'disconnected'|'sending_code'|'need_code'|'need_qr'|'checking'|'need_password'|'connected'|'error'} */
 let step = 'disconnected';
 let client = null;   // підключений клієнт
 let account = null;  // { id, username, name, phoneTail, since }
@@ -112,6 +113,49 @@ async function startLogin({ apiId, apiHash, phone }) {
       if (login !== mine) return;
       lastError ??= humanError(e);
       log('[login] failed:', String(e?.errorMessage ?? e?.message).slice(0, 80));
+      c.destroy().catch(() => {});
+      login = null;
+      setStep('error');
+    });
+  await nextStep();
+}
+
+/**
+ * Вхід через QR — без коду й без SIM: на телефоні робочого акаунта Telegram →
+ * Налаштування → Пристрої → «Підключити пристрій» і сканувати QR зі сторінки порталу.
+ * Токен у QR живе ~30 с; GramJS сам видає новий, сторінка оновлюється.
+ */
+async function startQrLogin({ apiId, apiHash }) {
+  if (client) throw new Error('The account is already connected.');
+  if (!/^\d{3,10}$/.test(String(apiId ?? '')) || !/^[a-f0-9]{32}$/i.test(String(apiHash ?? ''))) {
+    throw new Error('api_id is a number and api_hash is 32 hex characters — copy both from my.telegram.org.');
+  }
+  await cancelLogin();
+  lastError = null;
+  const c = newClient('', apiId, apiHash);
+  login = { client: c, apiId: Number(apiId), apiHash: String(apiHash), codeWaiter: null, passWaiter: null, hint: null, qr: null };
+  setStep('sending_code');
+  const mine = login;
+  c.connect()
+    .then(() => c.signInUserWithQrCode({ apiId: Number(apiId), apiHash: String(apiHash) }, {
+      qrCode: async ({ token }) => {
+        if (login !== mine) return;
+        mine.qr = await QRCode.toString(`tg://login?token=${Buffer.from(token).toString('base64url')}`, { type: 'svg', margin: 1 });
+        setStep('need_qr');
+      },
+      password: (hint) => new Promise((res) => { if (login === mine) { mine.qr = null; mine.hint = hint || null; mine.passWaiter = res; setStep('need_password'); } }),
+      onError: async (e) => {
+        lastError = humanError(e);
+        const retry = /PASSWORD_HASH_INVALID/.test(String(e?.errorMessage ?? e?.message));
+        if (!retry && login === mine) setStep('error');
+        return !retry;
+      },
+    }))
+    .then(() => (login === mine ? finishLogin(mine) : null))
+    .catch((e) => {
+      if (login !== mine) return;
+      lastError ??= humanError(e);
+      log('[login] qr failed:', String(e?.errorMessage ?? e?.message).slice(0, 80));
       c.destroy().catch(() => {});
       login = null;
       setStep('error');
@@ -338,7 +382,8 @@ async function status() {
     lastError ??= 'Database is unavailable.';
   }
   const code = login?.sent ? { via: login.sent.via, next: login.sent.next } : null;
-  return { step, account, error: lastError, hint: login?.hint ?? null, code, lastMessageAt, allowed, pult: pultStatus() };
+  const qr = step === 'need_qr' ? login?.qr ?? null : null;
+  return { step, account, error: lastError, hint: login?.hint ?? null, code, qr, lastMessageAt, allowed, pult: pultStatus() };
 }
 
 function readBody(req) {
@@ -354,6 +399,7 @@ const routes = {
   'GET /health': async () => ({ ok: true, step }),
   'GET /status': status,
   'POST /login/start': async (b) => { await startLogin(b); return status(); },
+  'POST /login/qr': async (b) => { await startQrLogin(b); return status(); },
   'POST /login/code': async (b) => { await submitCode(b.code); return status(); },
   'POST /login/password': async (b) => { await submitPassword(b.password); return status(); },
   'POST /login/resend': async () => { await resendCode(); return status(); },
