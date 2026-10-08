@@ -9,6 +9,7 @@ export interface ListenerStatus {
   account: { id: string; username: string | null; name: string; phoneTail: string | null; since: string } | null;
   error: string | null;
   hint: string | null;
+  code: { via: string | null; next: string | null } | null;
   lastMessageAt: string | null;
   allowed: { id: string; title: string | null; kind?: string; messages: number; last_at?: string | null }[];
   pult: { configured: boolean; botUsername?: string; bound?: boolean; bindCode?: string | null };

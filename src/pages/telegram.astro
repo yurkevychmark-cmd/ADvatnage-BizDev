@@ -14,6 +14,7 @@ const ACTIONS: Record<string, (f: FormData) => [string, Record<string, unknown>]
   start: (f) => ['/login/start', { apiId: f.get('api_id'), apiHash: f.get('api_hash'), phone: f.get('phone') }],
   code: (f) => ['/login/code', { code: f.get('code') }],
   password: (f) => ['/login/password', { password: f.get('password') }],
+  resend: () => ['/login/resend', {}],
   cancel: () => ['/login/cancel', {}],
   logout: () => ['/logout', {}],
   pult: (f) => ['/pult', { token: f.get('token') }],
@@ -43,6 +44,27 @@ try {
 }
 
 const step = status?.step;
+// Куди Telegram надіслав код (auth.SentCodeType*) — людською мовою.
+const VIA: Record<string, string> = {
+  'auth.SentCodeTypeApp': 'as a message from «Telegram» (blue tick) inside the work account\'s Telegram app — not by SMS',
+  'auth.SentCodeTypeSms': 'by SMS to the phone number',
+  'auth.SentCodeTypeFirebaseSms': 'by SMS to the phone number',
+  'auth.SentCodeTypeCall': 'by a phone call — a voice reads the code',
+  'auth.SentCodeTypeFlashCall': 'by a missed call — the code is in the calling number',
+  'auth.SentCodeTypeMissedCall': 'by a missed call — the code is the last digits of the calling number',
+  'auth.SentCodeTypeEmailCode': 'to the login email of the account',
+  'auth.SentCodeTypeFragmentSms': 'via Fragment (fragment.com) — the number is an anonymous one',
+};
+const NEXT: Record<string, string> = {
+  'auth.CodeTypeSms': 'Send by SMS instead',
+  'auth.CodeTypeCall': 'Get a phone call instead',
+  'auth.CodeTypeFlashCall': 'Get a missed call instead',
+  'auth.CodeTypeMissedCall': 'Get a missed call instead',
+  'auth.CodeTypeFragmentSms': 'Send via Fragment instead',
+};
+const via = status?.code?.via ? (VIA[status.code.via] ?? `in a way Telegram calls ${status.code.via}`) : null;
+const nextLabel = status?.code?.next ? (NEXT[status.code.next] ?? 'Send the code another way') : null;
+const emailRequired = status?.code?.via === 'auth.SentCodeTypeSetUpEmailRequired';
 const waiting = step === 'sending_code' || step === 'checking';
 const fmt = (s?: string | null) => (s ? new Date(s).toLocaleString('uk-UA', { timeZone: 'Europe/Kyiv', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) : '—');
 const input = 'w-full bg-card-2 border border-border rounded-lg px-4 py-2.5 text-sm text-gray-200 placeholder-gray-600 focus:border-accent outline-none';
@@ -108,11 +130,16 @@ const ghost = 'text-sm text-gray-400 hover:text-gray-200 border border-border ro
 
         {step === 'need_code' && (
           <form method="POST" class="space-y-3" autocomplete="off">
-            <p class="text-sm text-gray-400">Telegram sent a login code to the work account — in the Telegram app (or by SMS).</p>
+            {emailRequired ? (
+              <p class="text-sm text-amber-300">Telegram did not send a code: for sign-in from a new app it first wants a login email on this account. Add it in the Telegram app (Settings → Privacy and Security → Login Email), then press Cancel and start again.</p>
+            ) : (
+              <p class="text-sm text-gray-400">Telegram sent the login code {via ?? 'to the work account'}.</p>
+            )}
             <label class="block"><span class="block text-xs text-gray-500 mb-1">Code</span>
               <input name="code" required autofocus inputmode="numeric" autocomplete="one-time-code" class={input} /></label>
             <div class="flex gap-3">
               <button class={primary} name="action" value="code">Confirm</button>
+              {nextLabel && <button class={ghost} name="action" value="resend" formnovalidate>{nextLabel}</button>}
               <button class={ghost} name="action" value="cancel" formnovalidate>Cancel</button>
             </div>
           </form>

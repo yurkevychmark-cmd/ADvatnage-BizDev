@@ -82,6 +82,17 @@ async function startLogin({ apiId, apiHash, phone }) {
   login = { client: c, apiId: Number(apiId), apiHash: String(apiHash), codeWaiter: null, passWaiter: null, hint: null };
   setStep('sending_code');
   const mine = login;
+  // Куди Telegram надіслав код і чим можна попросити ще раз — GramJS цього не показує.
+  // Пишемо лише вид каналу; номер і хеш лишаються в пам'яті для «Надіслати інакше».
+  const guarded = c.invoke.bind(c);
+  c.invoke = async (req, ...rest) => {
+    const res = await guarded(req, ...rest);
+    if ((req.className === 'auth.SendCode' || req.className === 'auth.ResendCode') && res?.phoneCodeHash) {
+      mine.sent = { via: res.type?.className ?? null, next: res.nextType?.className ?? null, phone: req.phoneNumber, hash: res.phoneCodeHash };
+      log('[login] code via', mine.sent.via, 'next', mine.sent.next);
+    }
+    return res;
+  };
   c.connect()
     .then(() => c.start({
       phoneNumber: String(phone).replace(/[^\d+]/g, ''),
@@ -124,6 +135,13 @@ async function submitPassword(password) {
   setStep('checking');
   w(String(password));
   await nextStep();
+}
+
+async function resendCode() {
+  const sent = login?.sent;
+  if (step !== 'need_code' || !sent?.next) throw new Error('Telegram offers no other way to send the code now.');
+  lastError = null;
+  await login.client.invoke(new Api.auth.ResendCode({ phoneNumber: sent.phone, phoneCodeHash: sent.hash }));
 }
 
 async function cancelLogin() {
@@ -319,7 +337,8 @@ async function status() {
   } catch (e) {
     lastError ??= 'Database is unavailable.';
   }
-  return { step, account, error: lastError, hint: login?.hint ?? null, lastMessageAt, allowed, pult: pultStatus() };
+  const code = login?.sent ? { via: login.sent.via, next: login.sent.next } : null;
+  return { step, account, error: lastError, hint: login?.hint ?? null, code, lastMessageAt, allowed, pult: pultStatus() };
 }
 
 function readBody(req) {
@@ -337,6 +356,7 @@ const routes = {
   'POST /login/start': async (b) => { await startLogin(b); return status(); },
   'POST /login/code': async (b) => { await submitCode(b.code); return status(); },
   'POST /login/password': async (b) => { await submitPassword(b.password); return status(); },
+  'POST /login/resend': async () => { await resendCode(); return status(); },
   'POST /login/cancel': async () => { await cancelLogin(); lastError = null; if (!client) setStep('disconnected'); return status(); },
   'POST /logout': async () => { await logout(); return status(); },
   'POST /pult': async (b) => { await configurePult(b.token); return status(); },
