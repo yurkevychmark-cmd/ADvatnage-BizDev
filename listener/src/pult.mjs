@@ -56,6 +56,14 @@ export async function configurePult(token) {
   return pultStatus();
 }
 
+/** Прив'язати пульт до іншого Telegram: токен лишається, власник скидається, новий код. */
+export async function rebindPult() {
+  if (!state?.token) throw new Error('The bot is not set up yet.');
+  state = { ...state, ownerChatId: null, bindCode: randomBytes(4).toString('hex') };
+  await writeJson(FILE, state);
+  return pultStatus();
+}
+
 export async function forgetPult() {
   state = null;
   await removeFile(FILE);

@@ -19,6 +19,7 @@ const ACTIONS: Record<string, (f: FormData) => [string, Record<string, unknown>]
   cancel: () => ['/login/cancel', {}],
   logout: () => ['/logout', {}],
   pult: (f) => ['/pult', { token: f.get('token') }],
+  pult_rebind: () => ['/pult/rebind', {}],
   pult_forget: () => ['/pult/forget', {}],
 };
 
@@ -197,10 +198,16 @@ const ghost = 'text-sm text-gray-400 hover:text-gray-200 border border-border ro
         ) : (
           <div class="flex items-center justify-between gap-3">
             <p class="text-sm"><span class="inline-block w-2 h-2 rounded-full bg-success mr-2"></span>Linked: @{status.pult.botUsername}</p>
-            <form method="POST" onsubmit="return confirm('Forget this bot? You will need to paste the token again.')">
-              <input type="hidden" name="action" value="pult_forget" />
-              <button class={ghost}>Forget</button>
-            </form>
+            <div class="flex gap-2">
+              <form method="POST" onsubmit="return confirm('Link the bot to another Telegram account? This one stops getting messages.')">
+                <input type="hidden" name="action" value="pult_rebind" />
+                <button class={ghost}>Link to another Telegram</button>
+              </form>
+              <form method="POST" onsubmit="return confirm('Forget this bot? You will need to paste the token again.')">
+                <input type="hidden" name="action" value="pult_forget" />
+                <button class={ghost}>Forget</button>
+              </form>
+            </div>
           </div>
         )}
       </section>

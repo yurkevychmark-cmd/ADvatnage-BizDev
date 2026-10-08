@@ -16,7 +16,7 @@ import QRCode from 'qrcode';
 import { makeReadOnly } from './guard.mjs';
 import * as store from './store.mjs';
 import { readJson, writeJson, removeFile } from './files.mjs';
-import { loadPult, pultStatus, configurePult, forgetPult, notifyOwner } from './pult.mjs';
+import { loadPult, pultStatus, configurePult, rebindPult, forgetPult, notifyOwner } from './pult.mjs';
 
 const ALLOWED = new Set(
   (process.env.BIZDEV_TG_ALLOWED_CHATS ?? '').split(/[\s,]+/).filter(Boolean).map((s) => String(BigInt(s))),
@@ -406,6 +406,7 @@ const routes = {
   'POST /login/cancel': async () => { await cancelLogin(); lastError = null; if (!client) setStep('disconnected'); return status(); },
   'POST /logout': async () => { await logout(); return status(); },
   'POST /pult': async (b) => { await configurePult(b.token); return status(); },
+  'POST /pult/rebind': async () => { await rebindPult(); return status(); },
   'POST /pult/forget': async () => { await forgetPult(); return status(); },
   // Для налаштування BIZDEV_TG_ALLOWED_CHATS: лише id, тип і назва — без повідомлень.
   'GET /dialogs': async () => {
