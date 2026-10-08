@@ -74,6 +74,7 @@ function maskAfter(rest, mode) {
   const words = []; // { i, core }
   let force = /^\s*[:=—–-]/.test(rest) && mode === 'password';
   const marks = new Set();
+  let alreadyMasked = false; // пароль уже сховало інше правило — запасне не потрібне
   for (let i = 0; i < parts.length && words.length < WINDOW; i++) {
     if (!parts[i] || /^\s+$/.test(parts[i])) continue;
     const lead = parts[i].match(/^[:=—–\/-]+/)?.[0] ?? '';
@@ -82,13 +83,14 @@ function maskAfter(rest, mode) {
     const t = parts[i].slice(lead.length);
     const tail = t.match(/[,;:=]+$/)?.[0] ?? '';
     const core = t.slice(0, t.length - tail.length);
-    if (!core || /^\[.*\]$/.test(core)) { if (/[:=]/.test(tail) && mode === 'password') force = true; continue; }
+    if (/^\[.*\]$/.test(core)) { alreadyMasked = true; force = false; continue; }
+    if (!core) { if (/[:=]/.test(tail) && mode === 'password') force = true; continue; }
     if (SEP.has(core.toLowerCase())) { force = mode === 'password' || core === '/'; continue; }
     words.push({ i, core });
     if (force || looksSecret(core)) marks.add(i);
     force = /[:=]/.test(tail) && mode === 'password';
   }
-  if (!marks.size && mode === 'password' && !/^[,.!?]/.test(rest.trimStart())) {
+  if (!marks.size && !alreadyMasked && mode === 'password' && !/^[,.!?]/.test(rest.trimStart())) {
     const first = words.find((w) => !STOP.has(w.core.toLowerCase()) && w.core.length >= 3);
     if (first) marks.add(first.i);
   }

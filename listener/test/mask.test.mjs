@@ -76,6 +76,18 @@ test('звичайна мова й цифри угод не чіпаються',
   intact('кампанія 23847562938475 запущена'); // 14 цифр без Luhn
 });
 
+test('повторне маскування нічого не змінює', () => {
+  for (const t of [
+    'тест: пароль Qwerty123, гаманець 0x52908400098527886E0F7030069857D2E4169EE7, код 48213',
+    'пароль від кабінету Qwerty123, а звіт завтра',
+    'доступ: admin / qwerty123',
+    'pass hunter22 і логін team1',
+  ]) {
+    const once = mask(t).text;
+    assert.equal(mask(once).text, once, `другий прохід змінив «${once}»`);
+  }
+});
+
 test('порожнє і null', () => {
   assert.deepEqual(mask(''), { text: '', masked: [] });
   assert.deepEqual(mask(null), { text: '', masked: [] });
