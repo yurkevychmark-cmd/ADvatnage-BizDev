@@ -337,7 +337,7 @@ const routes = {
   'POST /login/start': async (b) => { await startLogin(b); return status(); },
   'POST /login/code': async (b) => { await submitCode(b.code); return status(); },
   'POST /login/password': async (b) => { await submitPassword(b.password); return status(); },
-  'POST /login/cancel': async () => { await cancelLogin(); lastError = null; return status(); },
+  'POST /login/cancel': async () => { await cancelLogin(); lastError = null; if (!client) setStep('disconnected'); return status(); },
   'POST /logout': async () => { await logout(); return status(); },
   'POST /pult': async (b) => { await configurePult(b.token); return status(); },
   'POST /pult/forget': async () => { await forgetPult(); return status(); },

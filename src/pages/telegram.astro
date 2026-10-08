@@ -7,6 +7,7 @@ import { listener, type ListenerStatus } from '../lib/listener';
 // Вони йдуть у слухач і далі в Telegram; ніде не зберігаються й не пишуться в лог.
 let status: ListenerStatus | null = null;
 let error = '';
+let errorIn: 'account' | 'pult' = 'account';
 let unavailable = false;
 
 const ACTIONS: Record<string, (f: FormData) => [string, Record<string, unknown>]> = {
@@ -22,8 +23,10 @@ const ACTIONS: Record<string, (f: FormData) => [string, Record<string, unknown>]
 try {
   if (Astro.request.method === 'POST') {
     const form = await Astro.request.formData();
-    const action = ACTIONS[String(form.get('action'))];
+    const key = String(form.get('action'));
+    const action = ACTIONS[key];
     if (action) {
+      errorIn = key.startsWith('pult') ? 'pult' : 'account';
       const [path, body] = action(form);
       try {
         status = await listener(path, body);
@@ -64,8 +67,8 @@ const ghost = 'text-sm text-gray-400 hover:text-gray-200 border border-border ro
       <section class="bg-card border border-border rounded-xl p-6">
         <h2 class="text-sm font-semibold text-gray-300 uppercase tracking-wide mb-4">Work account</h2>
 
-        {(error || status.error) && (
-          <div class="mb-4 text-sm text-red-300 bg-red-500/10 border border-red-500/30 rounded-lg px-3 py-2">{error || status.error}</div>
+        {((errorIn === 'account' && error) || status.error) && (
+          <div class="mb-4 text-sm text-red-300 bg-red-500/10 border border-red-500/30 rounded-lg px-3 py-2">{(errorIn === 'account' && error) || status.error}</div>
         )}
 
         {step === 'connected' && status.account && (
@@ -130,6 +133,9 @@ const ghost = 'text-sm text-gray-400 hover:text-gray-200 border border-border ro
 
       <section class="bg-card border border-border rounded-xl p-6">
         <h2 class="text-sm font-semibold text-gray-300 uppercase tracking-wide mb-4">Control bot</h2>
+        {errorIn === 'pult' && error && (
+          <div class="mb-4 text-sm text-red-300 bg-red-500/10 border border-red-500/30 rounded-lg px-3 py-2">{error}</div>
+        )}
         {!status.pult.configured ? (
           <form method="POST" class="space-y-3" autocomplete="off">
             <input type="hidden" name="action" value="pult" />
