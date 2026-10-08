@@ -11,9 +11,11 @@ const B58 = '1-9A-HJ-NP-Za-km-z';
 
 // \b у JS не бачить кирилиці, тому межі слова — через \p{L}\p{N}.
 const kw = (words) => `(?<![\\p{L}\\p{N}_])(?:${words})(?![\\p{L}\\p{N}_])`;
-const PASSWORD_KW = new RegExp(kw('пароль|паролі|пароля|паролем|password|passwd|pass|pwd|пасс|пас'), 'giu');
+// «[» перед словом — це вже наша маска «[пароль]», не ключове слово.
+const kwFree = (words) => `(?<!\\[)${kw(words)}`;
+const PASSWORD_KW = new RegExp(kwFree('пароль|паролі|пароля|паролем|password|passwd|pass|pwd|пасс|пас'), 'giu');
 // «доступ: admin / qwerty123» — тут пароль іде парою після логіна.
-const ACCESS_KW = new RegExp(kw('доступ|доступи|доступу|доступів|access|creds|credentials'), 'giu');
+const ACCESS_KW = new RegExp(kwFree('доступ|доступи|доступу|доступів|access|creds|credentials'), 'giu');
 const CODE_WORDS = kw('код|коду|кода|коди|code|otp|2fa|pin|пін|sms|смс|verification|підтвердження');
 
 /** Номер картки: сума Luhn. */
@@ -59,7 +61,7 @@ const RULES = [
 //  - кожне слово, схоже на пароль (цифри, спецсимволи, Великі всередині слова);
 //  - якщо такого немає — перше слово, що не є службовим («pass hunter», «пароль від кабінету Qwerty»).
 // Краще замаскувати зайве слово, ніж залишити пароль.
-const WINDOW = 8;
+const WINDOW = 10;
 const SEP = new Set([':', '=', '—', '–', '-', '/', 'is', 'це', 'є']);
 const STOP = new Set([
   'від', 'для', 'до', 'на', 'у', 'в', 'з', 'із', 'та', 'і', 'й', 'мій', 'моя', 'мого', 'твій', 'ваш', 'наш', 'новий', 'старий', 'такий',
@@ -78,19 +80,21 @@ function maskAfter(rest, mode) {
   for (let i = 0; i < parts.length && words.length < WINDOW; i++) {
     if (!parts[i] || /^\s+$/.test(parts[i])) continue;
     const lead = parts[i].match(/^[:=—–\/-]+/)?.[0] ?? '';
-    if (lead === parts[i]) { force = mode === 'password' || lead.includes('/'); continue; } // окремий роздільник
+    if (lead === parts[i]) { force = force || mode === 'password' || lead.includes('/'); continue; } // окремий роздільник
     if (lead && (mode === 'password' || lead.includes('/'))) force = true;
     const t = parts[i].slice(lead.length);
     const tail = t.match(/[,;:=]+$/)?.[0] ?? '';
     const core = t.slice(0, t.length - tail.length);
     if (/^\[.*\]$/.test(core)) { alreadyMasked = true; force = false; continue; }
     if (!core) { if (/[:=]/.test(tail) && mode === 'password') force = true; continue; }
-    if (SEP.has(core.toLowerCase())) { force = mode === 'password' || core === '/'; continue; }
+    if (SEP.has(core.toLowerCase())) { force = force || mode === 'password' || core === '/'; continue; }
     words.push({ i, core });
     if (force || looksSecret(core)) marks.add(i);
     force = /[:=]/.test(tail) && mode === 'password';
   }
-  if (!marks.size && !alreadyMasked && mode === 'password' && !/^[,.!?]/.test(rest.trimStart())) {
+  // Перше неслужбове слово після «пароль» ховається завжди (як у першій версії), навіть коли
+  // далі у вікні є інше слово з цифрами: «пароль Moonlight і логін team1».
+  if (!alreadyMasked && mode === 'password' && !/^[,.!?]/.test(rest.trimStart())) {
     const first = words.find((w) => !STOP.has(w.core.toLowerCase()) && w.core.length >= 3);
     if (first) marks.add(first.i);
   }
@@ -102,18 +106,49 @@ function maskAfter(rest, mode) {
   return { text: parts.join(''), hit: marks.size > 0 };
 }
 
+/**
+ * Вікно після ключового слова: до кінця рядка й до наступного ключового слова (у того —
+ * своє вікно: «фб пароль sunshine, трекер пароль moonlight»). Якщо рядок після ключового
+ * порожній або закінчується роздільником («Пароль:» ↵ «Qwerty123», «пароль від кабінету:» ↵ …),
+ * вікно переходить на наступний непорожній рядок.
+ */
+function windowAfter(text, from, limit) {
+  let end = from;
+  for (let lines = 0; lines < 4; lines++) {
+    const nl = text.indexOf('\n', end);
+    const lineEnd = nl < 0 || nl >= limit ? limit : nl;
+    const head = text.slice(from, lineEnd);
+    end = lineEnd;
+    // Є у рядку хоч одне змістовне слово (не службове й не роздільник)?
+    const words = head.split(/\s+/).some((t) => {
+      const core = t.replace(/^[:=—–\/-]+|[,;:=]+$/g, '').toLowerCase();
+      return /[\p{L}\p{N}]/u.test(core) && !STOP.has(core) && !SEP.has(core);
+    });
+    const endsWithSep = /[:=—–\/-]\s*$/.test(head);
+    if ((words && !endsWithSep) || lineEnd >= limit) break;
+    end = lineEnd + 1; // захопити наступний рядок
+  }
+  return Math.min(end, limit);
+}
+
 function maskPasswords(text, kinds) {
-  return text.split('\n').map((line) => {
-    for (const [re, mode] of [[PASSWORD_KW, 'password'], [ACCESS_KW, 'access']]) {
-      re.lastIndex = 0;
-      const m = re.exec(line);
-      if (!m) continue;
-      const at = m.index + m[0].length;
-      const r = maskAfter(line.slice(at), mode);
-      if (r.hit) { kinds.add('password'); line = line.slice(0, at) + r.text; }
-    }
-    return line;
-  }).join('\n');
+  const hits = [];
+  for (const [re, mode] of [[PASSWORD_KW, 'password'], [ACCESS_KW, 'access']]) {
+    re.lastIndex = 0;
+    for (let m; (m = re.exec(text)); ) hits.push({ start: m.index, end: m.index + m[0].length, mode });
+  }
+  hits.sort((a, b) => a.start - b.start);
+  // Справа наліво: заміни в пізніших вікнах не зсувають позиції ранніших.
+  let out = text;
+  for (let k = hits.length - 1; k >= 0; k--) {
+    const h = hits[k];
+    if (k > 0 && hits[k - 1].end > h.start) continue; // перекриття («логін/пароль» тощо) — бере попередній
+    const limit = k + 1 < hits.length ? hits[k + 1].start : text.length;
+    const to = windowAfter(text, h.end, limit);
+    const r = maskAfter(text.slice(h.end, to), h.mode);
+    if (r.hit) { kinds.add('password'); out = out.slice(0, h.end) + r.text + out.slice(to); }
+  }
+  return out;
 }
 
 /** Повідомлення лише з коду: «48213», «123 456». Круглі суми (10000) не чіпаємо. */
