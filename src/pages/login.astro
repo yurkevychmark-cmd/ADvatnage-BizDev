@@ -1,0 +1,67 @@
+---
+import AuthLayout from '../components/AuthLayout.astro';
+import { login, safeNext, sessionUser, setSessionCookie, SESSION_COOKIE } from '../lib/auth';
+
+const next = safeNext(Astro.url.searchParams.get('next'));
+let error = '';
+let email = '';
+
+// Уже увійшов — одразу далі.
+const existing = Astro.cookies.get(SESSION_COOKIE)?.value;
+if (Astro.request.method === 'GET' && existing) {
+  try {
+    if (await sessionUser(existing)) return Astro.redirect(next);
+  } catch (e) {
+    console.error('[auth] login page session check', e);
+  }
+}
+
+if (Astro.request.method === 'POST') {
+  const form = await Astro.request.formData();
+  email = String(form.get('email') ?? '').trim();
+  const password = String(form.get('password') ?? '');
+  try {
+    const token = email && password
+      ? await login(email, password, Astro.request.headers.get('user-agent'))
+      : null;
+    if (token) {
+      setSessionCookie(Astro.cookies, token);
+      return Astro.redirect(safeNext(String(form.get('next') ?? next)));
+    }
+    error = 'Wrong email or password.';
+    Astro.response.status = 401;
+  } catch (e) {
+    console.error('[auth] login', e);
+    error = 'Sign-in is temporarily unavailable. Try again in a minute.';
+    Astro.response.status = 503;
+  }
+}
+---
+
+<AuthLayout title="Sign in">
+  <h1 class="text-lg font-semibold text-white mb-1">Sign in</h1>
+  <p class="text-sm text-gray-500 mb-5">Partner and deal data is visible only after sign-in.</p>
+
+  {error && (
+    <div class="mb-4 text-sm text-red-300 bg-red-500/10 border border-red-500/30 rounded-lg px-3 py-2">{error}</div>
+  )}
+
+  <form method="POST" class="space-y-3">
+    <input type="hidden" name="next" value={next} />
+    <label class="block">
+      <span class="block text-xs text-gray-500 mb-1">Email</span>
+      <input name="email" type="email" required autocomplete="username" value={email} autofocus={!email}
+        class="w-full bg-card-2 border border-border rounded-lg px-4 py-2.5 text-sm text-gray-200 placeholder-gray-600 focus:border-accent outline-none" />
+    </label>
+    <label class="block">
+      <span class="block text-xs text-gray-500 mb-1">Password</span>
+      <input name="password" type="password" required autocomplete="current-password" autofocus={!!email}
+        class="w-full bg-card-2 border border-border rounded-lg px-4 py-2.5 text-sm text-gray-200 placeholder-gray-600 focus:border-accent outline-none" />
+    </label>
+    <button type="submit"
+      class="w-full bg-accent hover:bg-accent-dark text-white text-sm font-medium rounded-lg px-4 py-2.5 transition-colors">
+      Sign in
+    </button>
+  </form>
+  <p class="text-xs text-gray-600 mt-5">Forgot your password? Ask for a new invite link — it sets a new one.</p>
+</AuthLayout>

@@ -1,0 +1,82 @@
+---
+import AuthLayout from '../../components/AuthLayout.astro';
+import { acceptInvite, inviteInfo, setSessionCookie } from '../../lib/auth';
+
+// Одноразове посилання від deploy/auth/invite.sh: тут людина сама ставить собі пароль.
+// Пароль не проходить ні через кого, крім неї самої.
+const token = Astro.params.token ?? '';
+let invite: { email: string; name: string | null } | null = null;
+let error = '';
+let unavailable = false;
+
+try {
+  invite = await inviteInfo(token);
+} catch (e) {
+  console.error('[auth] invite info', e);
+  unavailable = true;
+}
+
+if (invite && Astro.request.method === 'POST') {
+  const form = await Astro.request.formData();
+  const password = String(form.get('password') ?? '');
+  const repeat = String(form.get('repeat') ?? '');
+  if (password.length < 10) {
+    error = 'Use at least 10 characters.';
+  } else if (password !== repeat) {
+    error = 'The two passwords do not match.';
+  } else {
+    try {
+      const session = await acceptInvite(token, password, Astro.request.headers.get('user-agent'));
+      if (session) {
+        setSessionCookie(Astro.cookies, session);
+        return Astro.redirect('/');
+      }
+      invite = null;
+    } catch (e) {
+      console.error('[auth] accept invite', e);
+      error = 'Could not save the password. Try again in a minute.';
+    }
+  }
+}
+if (!invite && !unavailable) Astro.response.status = 404;
+---
+
+<AuthLayout title="Set your password">
+  {unavailable ? (
+    <>
+      <h1 class="text-lg font-semibold text-white mb-2">Temporarily unavailable</h1>
+      <p class="text-sm text-gray-500">Try opening this link again in a minute.</p>
+    </>
+  ) : !invite ? (
+    <>
+      <h1 class="text-lg font-semibold text-white mb-2">This link no longer works</h1>
+      <p class="text-sm text-gray-500 mb-5">Invite links work once and expire after 24 hours. Ask for a new one.</p>
+      <a href="/login" class="text-sm text-accent hover:underline">Go to sign in</a>
+    </>
+  ) : (
+    <>
+      <h1 class="text-lg font-semibold text-white mb-1">Set your password</h1>
+      <p class="text-sm text-gray-500 mb-5">For <span class="text-gray-300">{invite.email}</span>. You will use it to sign in.</p>
+      {error && (
+        <div class="mb-4 text-sm text-red-300 bg-red-500/10 border border-red-500/30 rounded-lg px-3 py-2">{error}</div>
+      )}
+      <form method="POST" class="space-y-3">
+        <input type="email" name="username" value={invite.email} autocomplete="username" readonly class="hidden" />
+        <label class="block">
+          <span class="block text-xs text-gray-500 mb-1">New password · at least 10 characters</span>
+          <input name="password" type="password" required minlength="10" autocomplete="new-password" autofocus
+            class="w-full bg-card-2 border border-border rounded-lg px-4 py-2.5 text-sm text-gray-200 focus:border-accent outline-none" />
+        </label>
+        <label class="block">
+          <span class="block text-xs text-gray-500 mb-1">Repeat password</span>
+          <input name="repeat" type="password" required minlength="10" autocomplete="new-password"
+            class="w-full bg-card-2 border border-border rounded-lg px-4 py-2.5 text-sm text-gray-200 focus:border-accent outline-none" />
+        </label>
+        <button type="submit"
+          class="w-full bg-accent hover:bg-accent-dark text-white text-sm font-medium rounded-lg px-4 py-2.5 transition-colors">
+          Save and sign in
+        </button>
+      </form>
+    </>
+  )}
+</AuthLayout>
