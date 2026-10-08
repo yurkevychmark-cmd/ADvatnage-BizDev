@@ -9,17 +9,18 @@ import { SESSION_COOKIE, sessionUser } from './lib/auth';
  *
  * Не-GET запит з іншого сайту — 403 ще до перевірки сесії: cookie сесії браузер
  * підставляє сам, а вбудований checkOrigin Astro вимкнено (astro.config.mjs, c8a6aac).
- * Звіряємо лише хост: за Traefik запит приходить у контейнер по http.
+ * Звіряємо з заголовком Host, а не з ctx.url: у збірці Astro без
+ * security.allowedDomains ставить у ctx.url хост localhost (у dev — справжній).
  */
 const OPEN_PATHS = new Set(['/login', '/logout']);
 const OPEN_PREFIXES = ['/invite/'];
 
-function isForeignOrigin(request: Request, url: URL): boolean {
+function isForeignOrigin(request: Request): boolean {
   if (request.method === 'GET' || request.method === 'HEAD') return false;
   const origin = request.headers.get('origin');
   if (!origin) return false;
   try {
-    return new URL(origin).host !== url.host;
+    return new URL(origin).host !== request.headers.get('host');
   } catch {
     return true; // Origin: null (sandbox-iframe тощо)
   }
@@ -27,7 +28,7 @@ function isForeignOrigin(request: Request, url: URL): boolean {
 
 export const onRequest = defineMiddleware(async (ctx, next) => {
   const path = ctx.url.pathname;
-  if (isForeignOrigin(ctx.request, ctx.url)) {
+  if (isForeignOrigin(ctx.request)) {
     return new Response(JSON.stringify({ error: 'forbidden' }), {
       status: 403,
       headers: { 'Content-Type': 'application/json' },
