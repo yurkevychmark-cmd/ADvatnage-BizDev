@@ -8,4 +8,4 @@ dist
 .claude
 *.pptx
 .DS_Store
-backtest
+/backtest
