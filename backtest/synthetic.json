@@ -1,0 +1,132 @@
+[
+  {
+    "type": "trial_start",
+    "card": { "buyer": "Rafael (команда Delta Media)", "operator": "BetNova", "geo": "BR", "model": "CPA $45", "stage": "trial", "trial": "7 днів, старт 2026-10-15", "daily_budget": "$300", "note": "трекінг-посилання надіслано 2026-10-14" },
+    "context": [
+      { "ours": true, "author": "Marko", "text": "Hey Rafael, the operator confirmed the trial for Brazil. I sent you the tracking link yesterday." }
+    ],
+    "partner": "Hey, got the tracking link, thanks. Trial starts tomorrow right? And what budget should I keep per day?"
+  },
+  {
+    "type": "trial_start",
+    "card": { "buyer": "Delta Media", "operator": "BetNova", "geo": "PE", "model": "CPA $38", "stage": "trial", "trial": "старт заплановано 2026-10-16", "cap": "50 FTD на тріал" },
+    "context": [],
+    "partner": "Hi, we activated your trial offer for Peru. The cap is 50 FTD for the trial period. Can you confirm when the traffic goes live?"
+  },
+  {
+    "type": "trial_start",
+    "card": { "buyer": "Rafael (Delta Media)", "operator": "BetNova", "geo": "BR", "model": "CPA $45", "stage": "trial", "trial": "7 днів, старт 2026-10-15", "note": "постбек-посилання надіслано баєру 2026-10-14; підтвердження налаштування в картці немає" },
+    "context": [
+      { "ours": true, "author": "Marko", "text": "Rafael, postback link is in your email." }
+    ],
+    "partner": "Trial is ok, but I don't see the postback registered in the tracker yet. Should it already work?"
+  },
+  {
+    "type": "trial_start",
+    "card": { "buyer": "Delta Media", "operator": "BetNova", "geo": "BR", "model": "CPA $45", "stage": "trial", "trial": "7 днів, старт 2026-10-15 09:00", "note": "зараз 12:10 того ж дня" },
+    "context": [],
+    "partner": "Hey, trial is live since this morning, 0 regs so far. Is that normal for the first hours?"
+  },
+
+  {
+    "type": "weak_numbers",
+    "card": { "buyer": "Delta Media", "operator": "BetNova", "geo": "BR", "model": "CPA $45", "stage": "trial", "trial": "день 3 з 7", "stats_3d": "1 900 кліків, 41 реєстрація, 2 FTD, витрати $540", "note": "норми конверсії в картці немає" },
+    "context": [],
+    "partner": "Hi, first 3 days: 1,900 clicks, 41 regs, 2 FTD. Quality looks low to us. What is going on?"
+  },
+  {
+    "type": "weak_numbers",
+    "card": { "buyer": "Rafael (Delta Media)", "operator": "BetNova", "geo": "BR", "model": "CPA $45", "stage": "trial", "trial": "день 4 з 7", "stats_4d": "витрати $780, 9 FTD" },
+    "context": [],
+    "partner": "Numbers are bad after day 4, CPA way above 45. Should we pause the campaigns?"
+  },
+  {
+    "type": "weak_numbers",
+    "card": { "buyer": "Delta Media", "operator": "BetNova", "geo": "BR", "model": "CPA $45", "stage": "trial", "trial": "день 5 з 7", "stats_5d": "FTD rate 2,8%", "terms": "мінімальна конверсія за умовами в картці не вказана" },
+    "context": [],
+    "partner": "FTD rate is under 3%, our minimum for this offer is 5%. Either you improve it or we stop the trial."
+  },
+  {
+    "type": "weak_numbers",
+    "card": { "buyer": "Rafael (Delta Media)", "operator": "BetNova", "geo": "BR", "model": "CPA $45", "stage": "trial", "trial": "день 3 з 7", "stats_3d": "витрати $400, 0 FTD" },
+    "context": [],
+    "partner": "We spent $400 and have zero FTD. The operator says the traffic is bad. Can you ask them to check the postbacks on their side?"
+  },
+
+  {
+    "type": "new_geo",
+    "card": { "buyer": "Rafael (Delta Media)", "operator": "BetNova", "geo_in_deal": "BR", "model": "CPA $45", "stage": "active", "note": "інших гео в картці немає" },
+    "context": [],
+    "partner": "Can we also run Mexico under the same terms?"
+  },
+  {
+    "type": "new_geo",
+    "card": { "buyer": "Delta Media", "operator": "BetNova", "geo_in_deal": "PE", "model": "CPA $38", "stage": "active", "note": "Чилі в картці немає" },
+    "context": [],
+    "partner": "We can open Chile for you with a higher CPA, $60. Interested?"
+  },
+  {
+    "type": "new_geo",
+    "card": { "buyer": "Delta Media", "stage": "active", "geo_in_deal": "BR", "note": "оферів по Німеччині в базі немає" },
+    "context": [],
+    "partner": "Do you have an offer for Germany, tier 1? We have a team ready to start."
+  },
+  {
+    "type": "new_geo",
+    "card": { "buyer": "Delta Media", "operator": "BetNova", "geo_in_deal": "PE", "model": "CPA $38", "cap": "50 FTD на тріал", "stage": "trial", "note": "Колумбії в картці немає" },
+    "context": [],
+    "partner": "Peru cap is full. We can move you to Colombia from Monday if you want."
+  },
+
+  {
+    "type": "report_late",
+    "card": { "buyer": "Rafael (Delta Media)", "operator": "BetNova", "stage": "active", "reports": "щоденний звіт до 18:00; останній отриманий 2026-10-13" },
+    "context": [],
+    "partner": "Hi, we still haven't received yesterday's report. Can you send it please?"
+  },
+  {
+    "type": "report_late",
+    "card": { "buyer": "Delta Media", "operator": "BetNova", "stage": "active", "reports": "тижневий звіт оператора по п'ятницях; за минулий тиждень не отримано" },
+    "context": [],
+    "partner": "The operator still didn't send the stats for last week, I can't see any numbers. Can you chase them?"
+  },
+  {
+    "type": "report_late",
+    "card": { "buyer": "Delta Media", "operator": "BetNova", "stage": "active", "reports": "тижневий звіт до п'ятниці; сьогодні вівторок, звіту немає" },
+    "context": [],
+    "partner": "The weekly report was due on Friday. It's Tuesday already."
+  },
+  {
+    "type": "report_late",
+    "card": { "buyer": "Rafael (Delta Media)", "operator": "BetNova", "stage": "active", "reports": "щоденний звіт до 18:00" },
+    "context": [],
+    "partner": "Sorry, today's report will be late, my analyst is sick. Is tomorrow ok?"
+  },
+
+  {
+    "type": "partner_silent",
+    "card": { "buyer": "Rafael (Delta Media)", "stage": "trial", "promise": "у п'ятницю 2026-10-09 обіцяв надіслати перші цифри", "last_partner_message": "2026-10-08", "now": "2026-10-13", "pings_sent": 0 },
+    "context": [
+      { "ours": false, "author": "Rafael", "text": "I will send the first numbers on Friday." }
+    ],
+    "partner": "(нового повідомлення немає: від партнера тиша 5 днів)"
+  },
+  {
+    "type": "partner_silent",
+    "card": { "operator": "BetNova", "stage": "trial", "trial": "закінчується 2026-10-17", "last_partner_message": "2026-10-09", "now": "2026-10-14", "pings_sent": 0 },
+    "context": [],
+    "partner": "(нового повідомлення немає: від оператора тиша 5 днів)"
+  },
+  {
+    "type": "partner_silent",
+    "card": { "buyer": "Delta Media", "stage": "new", "last_partner_message": "2026-10-11", "now": "2026-10-14", "pings_sent": 0, "note": "приводу для пінга в картці немає: ні обіцянки, ні строку" },
+    "context": [],
+    "partner": "(нового повідомлення немає: від баєра тиша 3 дні)"
+  },
+  {
+    "type": "partner_silent",
+    "card": { "buyer": "Rafael (Delta Media)", "stage": "trial", "last_partner_message": "2026-09-28", "now": "2026-10-14", "pings_sent": 3, "pings": "2026-10-02, 2026-10-07, 2026-10-12 — без відповіді" },
+    "context": [],
+    "partner": "(нового повідомлення немає: від партнера тиша 16 днів, три пінги без відповіді)"
+  }
+]

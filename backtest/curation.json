@@ -1,0 +1,252 @@
+[
+ {
+  "chat": "chat-blackhat-fb-matthew",
+  "ts": "2026-06-18 07:46",
+  "type": "access"
+ },
+ {
+  "chat": "chat-blackhat-fb-antonio",
+  "ts": "2026-04-20 11:31",
+  "type": "access"
+ },
+ {
+  "chat": "chat-blackhat-fb-christian",
+  "ts": "2026-03-31 17:07",
+  "type": "access"
+ },
+ {
+  "chat": "chat-blackhat-fb-the-wolf-partners",
+  "ts": "2026-03-12 10:44",
+  "type": "access"
+ },
+ {
+  "chat": "chat-blackhat-fb-barni",
+  "ts": "2026-07-23 12:08",
+  "type": "access"
+ },
+ {
+  "chat": "chat-blackhat-fb-crads-media",
+  "ts": "2025-12-03 10:33",
+  "type": "access"
+ },
+ {
+  "chat": "chat-blackhat-fb-barni",
+  "ts": "2026-06-24 11:04",
+  "type": "access"
+ },
+ {
+  "chat": "chat-blackhat-fb-pedraobet",
+  "ts": "2026-06-09 14:37",
+  "type": "timing"
+ },
+ {
+  "chat": "chat-blackhat-fb-joao",
+  "ts": "2026-04-22 10:34",
+  "type": "timing"
+ },
+ {
+  "chat": "chat-blackhat-fb-stoyan",
+  "ts": "2026-09-04 16:20",
+  "type": "timing"
+ },
+ {
+  "chat": "chat-blackhat-fb-matthew",
+  "ts": "2026-06-25 07:42",
+  "type": "materials"
+ },
+ {
+  "chat": "chat-blackhat-fb-sno-marketing",
+  "ts": "2026-02-23 17:09",
+  "type": "materials"
+ },
+ {
+  "chat": "chat-blackhat-fb-growth-leads",
+  "ts": "2026-03-09 12:30",
+  "type": "materials"
+ },
+ {
+  "chat": "chat-blackhat-fb-crads-media",
+  "ts": "2026-01-20 17:01",
+  "type": "materials"
+ },
+ {
+  "chat": "chat-blackhat-fb-ventureslab",
+  "ts": "2026-03-18 16:23",
+  "type": "materials"
+ },
+ {
+  "chat": "chat-blackhat-fb-pedraobet",
+  "ts": "2026-06-10 15:55",
+  "type": "scheduling"
+ },
+ {
+  "chat": "chat-blackhat-fb-matthew",
+  "ts": "2026-05-21 13:50",
+  "type": "scheduling"
+ },
+ {
+  "chat": "chat-blackhat-fb-joao",
+  "ts": "2026-04-13 10:59",
+  "type": "scheduling"
+ },
+ {
+  "chat": "chat-blackhat-fb-siddharth",
+  "ts": "2026-07-16 12:51",
+  "type": "scheduling"
+ },
+ {
+  "chat": "chat-balck-affiliate-mr-k",
+  "ts": "2026-03-25 16:37",
+  "type": "advice"
+ },
+ {
+  "chat": "chat-balck-affiliate-mr-k",
+  "ts": "2026-03-05 14:07",
+  "type": "advice"
+ },
+ {
+  "chat": "chat-balck-affiliate-mr-k",
+  "ts": "2026-03-25 16:25",
+  "type": "advice"
+ },
+ {
+  "chat": "chat-blackhat-fb-tasp-pal",
+  "ts": "2026-05-08 12:20",
+  "type": "advice"
+ },
+ {
+  "chat": "chat-blackhat-fb-tasp-pal",
+  "ts": "2026-04-28 15:07",
+  "type": "advice"
+ },
+ {
+  "chat": "chat-blackhat-fb-irregular",
+  "ts": "2026-01-27 18:30",
+  "type": "advice"
+ },
+ {
+  "chat": "chat-blackhat-fb-irregular",
+  "ts": "2026-03-17 16:02",
+  "type": "advice"
+ },
+ {
+  "chat": "chat-blackhat-fb-tasp-pal",
+  "ts": "2026-06-11 16:07",
+  "type": "advice"
+ },
+ {
+  "chat": "chat-blackhat-fb-pedraobet",
+  "ts": "2026-06-08 18:19",
+  "type": "results"
+ },
+ {
+  "chat": "chat-blackhat-fb-siddharth",
+  "ts": "2026-05-13 11:43",
+  "type": "results"
+ },
+ {
+  "chat": "chat-blackhat-fb-growth-leads",
+  "ts": "2026-03-25 09:34",
+  "type": "results"
+ },
+ {
+  "chat": "chat-blackhat-fb-crads-media",
+  "ts": "2026-01-20 17:16",
+  "type": "results"
+ },
+ {
+  "chat": "chat-blackhat-fb-growth-leads",
+  "ts": "2026-04-14 14:30",
+  "type": "results"
+ },
+ {
+  "chat": "chat-blackhat-fb-filipe-albano",
+  "ts": "2026-03-18 14:06",
+  "type": "results"
+ },
+ {
+  "chat": "chat-black-affiliate-dominik",
+  "ts": "2025-11-28 17:08",
+  "type": "results"
+ },
+ {
+  "chat": "chat-advantage-tarmo",
+  "ts": "2026-02-16 13:48",
+  "type": "smalltalk"
+ },
+ {
+  "chat": "chat-blackhat-fb-pedraobet",
+  "ts": "2026-05-25 19:05",
+  "type": "smalltalk"
+ },
+ {
+  "chat": "chat-blackhat-fb-sno-marketing",
+  "ts": "2026-03-16 19:04",
+  "type": "smalltalk"
+ },
+ {
+  "chat": "chat-blackhat-fb-stoyan",
+  "ts": "2025-12-26 15:07",
+  "type": "smalltalk"
+ },
+ {
+  "chat": "chat-blackhat-fb-stoyan",
+  "ts": "2025-12-04 13:01",
+  "type": "money"
+ },
+ {
+  "chat": "chat-blackhat-fb-matthew",
+  "ts": "2026-06-18 09:36",
+  "type": "money"
+ },
+ {
+  "chat": "chat-blackhat-fb-stoyan",
+  "ts": "2026-09-04 14:53",
+  "type": "money"
+ },
+ {
+  "chat": "chat-blackhat-fb-the-wolf-partners",
+  "ts": "2026-03-04 09:07",
+  "type": "money"
+ },
+ {
+  "chat": "chat-blackhat-fb-siddharth",
+  "ts": "2026-08-12 14:14",
+  "type": "money"
+ },
+ {
+  "chat": "chat-blackhat-fb-vincent",
+  "ts": "2026-03-12 16:18",
+  "type": "money"
+ },
+ {
+  "chat": "chat-blackhat-fb-barni",
+  "ts": "2026-06-24 13:05",
+  "type": "ban"
+ },
+ {
+  "chat": "chat-blackhat-fb-tasp-pal",
+  "ts": "2026-07-03 11:06",
+  "type": "ban"
+ },
+ {
+  "chat": "chat-blackhat-fb-siddharth",
+  "ts": "2026-07-01 10:26",
+  "type": "ban"
+ },
+ {
+  "chat": "chat-black-affiliate-dominik",
+  "ts": "2026-01-22 13:18",
+  "type": "ban"
+ },
+ {
+  "chat": "chat-blackhat-fb-tasp-pal",
+  "ts": "2026-04-27 16:35",
+  "type": "timing"
+ },
+ {
+  "chat": "chat-advantage-tarmo",
+  "ts": "2025-10-17 10:52",
+  "type": "timing"
+ }
+]

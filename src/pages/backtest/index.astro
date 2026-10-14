@@ -1,0 +1,260 @@
+---
+import Layout from '../../components/Layout.astro';
+import { supabase } from '../../lib/supabase';
+import { toItems, typeLabel, TYPE_LABELS } from '../../lib/backtest';
+
+// Бектест BizDev-агента (таск cfb5898d): ситуації з архіву й синтетичні, чернетка агента, розмітка.
+// Агент писав чернетки, не бачачи справжніх відповідей; нічого нікуди не надсилається.
+const { data, error } = await supabase
+  .from('backtest_situations')
+  .select('*, backtest_drafts(*), backtest_decisions(*)')
+  .order('sort_order');
+
+const items = toItems(data ?? []);
+const types = [...new Set(items.map((i) => i.type))];
+const payload = JSON.stringify({
+  items,
+  labels: Object.fromEntries(types.map((t) => [t, { label: typeLabel(t), red: !!TYPE_LABELS[t]?.red }])),
+}).replace(/</g, '\\u003c');
+---
+
+<Layout title="Backtest">
+  <div class="mb-6 flex flex-wrap items-end justify-between gap-4">
+    <div>
+      <h1 class="text-2xl font-bold">Backtest</h1>
+      <p class="text-gray-500 text-sm mt-1">The agent wrote a draft for each situation without seeing the real reply. Mark each one. Nothing is sent anywhere.</p>
+    </div>
+    <a href="/backtest/summary" class="text-sm text-accent hover:underline">Summary by situation type →</a>
+  </div>
+
+  {error && <div class="mb-4 bg-danger/10 border border-danger/30 text-danger text-sm rounded-lg px-4 py-3 max-w-2xl">Could not load the backtest. Try again in a minute.</div>}
+
+  {items.length === 0 ? (
+    <div class="bg-card rounded-xl border border-border p-16 text-center max-w-3xl">
+      <p class="text-gray-400 text-lg mb-2">No backtest loaded yet</p>
+      <p class="text-gray-600 text-sm">Situations appear here after the backtest run is loaded into the database.</p>
+    </div>
+  ) : (
+    <div id="bt" class="max-w-6xl">
+      <div class="flex flex-wrap items-center gap-3 mb-4">
+        <div class="flex-1 min-w-[16rem]">
+          <div class="flex justify-between text-xs text-gray-500 mb-1"><span id="bt-progress-text"></span><span id="bt-pos"></span></div>
+          <div class="h-1.5 bg-card-2 rounded-full overflow-hidden"><div id="bt-bar" class="h-full bg-accent transition-all" style="width:0"></div></div>
+        </div>
+        <select id="bt-filter" class="bg-card-2 border border-border rounded-lg px-3 py-2 text-sm text-gray-300 outline-none focus:border-accent">
+          <option value="unmarked">Unmarked only</option>
+          <option value="all">All situations</option>
+          <option value="archive">Archive only</option>
+          <option value="synthetic">Synthetic only</option>
+          {types.map((t) => <option value={`type:${t}`}>{typeLabel(t)}</option>)}
+        </select>
+      </div>
+
+      <div id="bt-empty" class="hidden bg-card rounded-xl border border-border p-12 text-center">
+        <p class="text-gray-300 text-lg mb-2">Nothing left in this filter</p>
+        <p class="text-gray-500 text-sm">Switch the filter to “All situations”, or open the <a href="/backtest/summary" class="text-accent hover:underline">summary</a>.</p>
+      </div>
+
+      <div id="bt-card" class="grid gap-5 lg:grid-cols-2">
+        <section class="bg-card border border-border rounded-xl p-5 min-w-0">
+          <div class="flex flex-wrap items-center gap-2 mb-3" id="bt-chips"></div>
+          <dl id="bt-deal" class="hidden text-xs grid grid-cols-[auto,1fr] gap-x-3 gap-y-1 bg-card-2 border border-border rounded-lg p-3 mb-3"></dl>
+          <details id="bt-ctx-wrap" class="mb-3 hidden">
+            <summary class="text-xs text-gray-500 cursor-pointer">Previous messages</summary>
+            <div id="bt-ctx" class="mt-2 space-y-1.5 max-h-56 overflow-y-auto pr-1"></div>
+          </details>
+          <p class="text-xs uppercase tracking-wide text-gray-500 mb-1.5">Partner wrote</p>
+          <div id="bt-partner" class="rounded-lg bg-card-2 border border-border px-3 py-2.5 text-sm text-gray-200 whitespace-pre-wrap break-words"></div>
+        </section>
+
+        <section class="bg-card border border-border rounded-xl p-5 min-w-0">
+          <p class="text-xs uppercase tracking-wide text-gray-500 mb-1.5">Agent draft <span id="bt-route" class="ml-2 normal-case"></span></p>
+          <div id="bt-draft" class="space-y-2 mb-3"></div>
+          <p id="bt-why" class="text-xs text-gray-500 mb-1"></p>
+          <p id="bt-gap" class="hidden text-xs text-amber-300 mb-3"></p>
+          <div id="bt-real-wrap" class="hidden mt-4 pt-4 border-t border-border">
+            <p class="text-xs uppercase tracking-wide text-gray-500 mb-1.5">What was actually sent</p>
+            <div id="bt-real" class="rounded-lg bg-card-2 border border-border px-3 py-2.5 text-sm text-gray-300 whitespace-pre-wrap break-words"></div>
+          </div>
+        </section>
+
+        <section class="lg:col-span-2 bg-card border border-border rounded-xl p-5">
+          <div class="flex flex-wrap gap-3 items-center">
+            <button data-v="same" class="bt-v px-4 py-2.5 rounded-lg text-sm font-medium border border-border bg-card-2 hover:border-success text-gray-200 transition-colors"><span id="bt-l-same"></span> <kbd class="ml-1 text-xs text-gray-500">1</kbd></button>
+            <button data-v="no" class="bt-v px-4 py-2.5 rounded-lg text-sm font-medium border border-border bg-card-2 hover:border-danger text-gray-200 transition-colors">Not it <kbd class="ml-1 text-xs text-gray-500">2</kbd></button>
+            <button data-v="edited" class="bt-v px-4 py-2.5 rounded-lg text-sm font-medium border border-border bg-card-2 hover:border-accent text-gray-200 transition-colors">My version <kbd class="ml-1 text-xs text-gray-500">3</kbd></button>
+            <span class="flex-1"></span>
+            <button id="bt-prev" class="px-3 py-2 rounded-lg text-sm border border-border text-gray-400 hover:text-gray-200">← Back</button>
+            <button id="bt-next" class="px-3 py-2 rounded-lg text-sm border border-border text-gray-400 hover:text-gray-200">Skip →</button>
+          </div>
+          <div id="bt-edit-wrap" class="hidden mt-4">
+            <label class="block text-xs text-gray-500 mb-1">How you would write it (Ctrl/⌘ + Enter to save)</label>
+            <textarea id="bt-edit" rows="4" class="w-full bg-card-2 border border-border rounded-lg px-3 py-2.5 text-sm text-gray-200 outline-none focus:border-accent"></textarea>
+          </div>
+          <div class="mt-4">
+            <label class="block text-xs text-gray-500 mb-1">Note, optional (why “not it”: too long, too formal, wrong point…)</label>
+            <input id="bt-note" maxlength="1000" class="w-full bg-card-2 border border-border rounded-lg px-3 py-2 text-sm text-gray-200 outline-none focus:border-accent" />
+          </div>
+          <p id="bt-msg" class="text-xs mt-3 min-h-[1rem]"></p>
+          <p class="text-xs text-gray-600 mt-2">Keys: 1 same · 2 not it · 3 my version · ← → move</p>
+        </section>
+      </div>
+    </div>
+  )}
+
+  <script id="bt-data" type="application/json" set:html={payload} />
+  <script is:inline>
+    (function () {
+      var el = document.getElementById('bt-data');
+      if (!el || !document.getElementById('bt')) return;
+      var D = JSON.parse(el.textContent);
+      var items = D.items, labels = D.labels;
+      var filter = 'unmarked', idx = 0, editing = false;
+      var $ = function (id) { return document.getElementById(id); };
+      var order = []; // індекси items за поточним фільтром
+
+      function match(it) {
+        if (filter === 'all') return true;
+        if (filter === 'unmarked') return !it.decision;
+        if (filter === 'archive' || filter === 'synthetic') return it.kind === filter;
+        return filter.indexOf('type:') === 0 && it.type === filter.slice(5);
+      }
+      function rebuild(keepId) {
+        order = [];
+        items.forEach(function (it, i) { if (match(it) || it.id === keepId) order.push(i); });
+        if (keepId) { var p = order.map(function (i) { return items[i].id; }).indexOf(keepId); idx = p < 0 ? 0 : p; }
+        else idx = 0;
+      }
+      function chip(text, cls) {
+        var s = document.createElement('span');
+        s.className = 'px-2 py-0.5 rounded-md text-xs border ' + (cls || 'border-border text-gray-400');
+        s.textContent = text; return s;
+      }
+      function bubble(text, cls) {
+        var d = document.createElement('div');
+        d.className = 'rounded-lg px-3 py-2 text-sm whitespace-pre-wrap break-words ' + cls;
+        d.textContent = text; return d;
+      }
+      function sameLabel(it) {
+        if (it.draft && it.draft.route === 'human') return '✓ Right, this is for me';
+        if (it.draft && it.draft.route === 'none') return '✓ Right, no ping';
+        return '✓ Same as I would';
+      }
+      function say(text, ok) { var m = $('bt-msg'); m.textContent = text || ''; m.className = 'text-xs mt-3 min-h-[1rem] ' + (ok ? 'text-success' : 'text-danger'); }
+
+      function render() {
+        var done = items.filter(function (i) { return i.decision; }).length;
+        $('bt-progress-text').textContent = 'Marked ' + done + ' of ' + items.length;
+        $('bt-bar').style.width = (100 * done / items.length) + '%';
+        var empty = order.length === 0;
+        $('bt-empty').classList.toggle('hidden', !empty);
+        $('bt-card').classList.toggle('hidden', empty);
+        $('bt-pos').textContent = empty ? '' : (idx + 1) + ' / ' + order.length + ' in this filter';
+        if (empty) return;
+        var it = items[order[idx]];
+        var L = labels[it.type] || { label: it.type };
+
+        var chips = $('bt-chips'); chips.textContent = '';
+        chips.appendChild(chip(L.label, L.red ? 'border-danger/50 text-danger' : 'border-gray-500 text-gray-200'));
+        chips.appendChild(chip(it.kind === 'archive' ? 'Archive' : 'Synthetic'));
+        if (it.kind === 'archive') chips.appendChild(chip((it.title || '') + (it.ts ? ' · ' + it.ts.slice(0, 10) : '')));
+        else chips.appendChild(chip('invented scenario'));
+        if (it.decision) chips.appendChild(chip('marked', 'border-success/40 text-success'));
+
+        var deal = $('bt-deal'); deal.textContent = '';
+        if (it.card) {
+          Object.keys(it.card).forEach(function (k) {
+            var dt = document.createElement('dt'); dt.className = 'text-gray-500'; dt.textContent = k;
+            var dd = document.createElement('dd'); dd.className = 'text-gray-300'; dd.textContent = String(it.card[k]);
+            deal.appendChild(dt); deal.appendChild(dd);
+          });
+          deal.classList.remove('hidden');
+        } else deal.classList.add('hidden');
+
+        var ctx = $('bt-ctx'); ctx.textContent = '';
+        (it.context || []).forEach(function (m) {
+          ctx.appendChild(bubble((m.ours ? 'We' : 'Partner') + ' (' + m.author + '): ' + m.text, m.ours ? 'bg-accent/10 text-gray-300 text-xs' : 'bg-card-2 text-gray-400 text-xs'));
+        });
+        $('bt-ctx-wrap').classList.toggle('hidden', !(it.context && it.context.length));
+        $('bt-partner').textContent = it.partner;
+
+        var dr = it.draft, draft = $('bt-draft'); draft.textContent = '';
+        var route = $('bt-route'); route.textContent = '';
+        if (dr) {
+          if (dr.route === 'draft') {
+            route.appendChild(chip('draft', 'border-border text-gray-400'));
+            dr.messages.forEach(function (m) { draft.appendChild(bubble(m, 'bg-accent/10 border border-accent/30 text-gray-100')); });
+          } else if (dr.route === 'human') {
+            route.appendChild(chip('for you, no draft', 'border-danger/40 text-danger'));
+            draft.appendChild(bubble('The agent hands this to you and writes nothing to the partner.', 'bg-card-2 border border-border text-gray-300'));
+          } else {
+            route.appendChild(chip('no ping', 'border-border text-gray-400'));
+            draft.appendChild(bubble('No reason to write, so the agent stays silent.', 'bg-card-2 border border-border text-gray-300'));
+          }
+          $('bt-why').textContent = 'Why: ' + (dr.why || '—');
+          var gap = $('bt-gap'); gap.textContent = dr.cardGap ? 'Not in the deal card: ' + dr.cardGap : ''; gap.classList.toggle('hidden', !dr.cardGap);
+        } else { draft.appendChild(bubble('No draft for this situation.', 'bg-card-2 text-gray-500')); $('bt-why').textContent = ''; $('bt-gap').classList.add('hidden'); }
+
+        $('bt-real-wrap').classList.toggle('hidden', !it.realReply);
+        $('bt-real').textContent = it.realReply || '';
+
+        $('bt-l-same').textContent = sameLabel(it).slice(2);
+        document.querySelectorAll('.bt-v').forEach(function (b) {
+          var on = it.decision && it.decision.verdict === b.getAttribute('data-v');
+          b.classList.toggle('ring-2', !!on); b.classList.toggle('ring-accent', !!on);
+        });
+        editing = !!(it.decision && it.decision.verdict === 'edited');
+        $('bt-edit-wrap').classList.toggle('hidden', !editing);
+        $('bt-edit').value = it.decision && it.decision.editedText ? it.decision.editedText : '';
+        $('bt-note').value = it.decision && it.decision.note ? it.decision.note : '';
+        say('');
+      }
+
+      function go(d) { if (!order.length) return; idx = (idx + d + order.length) % order.length; render(); }
+
+      function save(verdict) {
+        var it = items[order[idx]];
+        var edited = $('bt-edit').value.trim();
+        if (verdict === 'edited' && !edited) { editing = true; $('bt-edit-wrap').classList.remove('hidden'); $('bt-edit').focus(); say('Write your version, then press Ctrl/⌘ + Enter or “My version” again.', false); return; }
+        say('Saving…', true);
+        fetch('/api/backtest-decide', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ id: it.id, verdict: verdict, editedText: verdict === 'edited' ? edited : null, note: $('bt-note').value })
+        }).then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
+          .then(function (res) {
+            if (!res.ok) { say(res.j.error || 'Could not save', false); return; }
+            it.decision = { verdict: verdict, editedText: verdict === 'edited' ? edited : null, note: $('bt-note').value.trim() || null, decidedBy: null, decidedAt: new Date().toISOString() };
+            var cur = it.id;
+            if (filter === 'unmarked') { var pos = idx; rebuild(); idx = Math.min(pos, Math.max(order.length - 1, 0)); }
+            else { rebuild(cur); go(1); return; }
+            render();
+          })
+          .catch(function () { say('No connection. Try again.', false); });
+      }
+
+      document.querySelectorAll('.bt-v').forEach(function (b) {
+        b.addEventListener('click', function () {
+          var v = b.getAttribute('data-v');
+          if (v === 'edited') {
+            if (!editing) { editing = true; $('bt-edit-wrap').classList.remove('hidden'); $('bt-edit').focus(); return; }
+          }
+          save(v);
+        });
+      });
+      $('bt-next').addEventListener('click', function () { go(1); });
+      $('bt-prev').addEventListener('click', function () { go(-1); });
+      $('bt-filter').addEventListener('change', function (e) { filter = e.target.value; rebuild(); render(); });
+      $('bt-edit').addEventListener('keydown', function (e) { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) { e.preventDefault(); save('edited'); } });
+      document.addEventListener('keydown', function (e) {
+        var t = e.target && e.target.tagName;
+        if (t === 'TEXTAREA' || t === 'INPUT' || t === 'SELECT' || e.metaKey || e.ctrlKey || e.altKey) return;
+        if (e.key === '1') save('same'); else if (e.key === '2') save('no');
+        else if (e.key === '3') { editing = true; $('bt-edit-wrap').classList.remove('hidden'); e.preventDefault(); $('bt-edit').focus(); }
+        else if (e.key === 'ArrowRight') go(1); else if (e.key === 'ArrowLeft') go(-1);
+      });
+
+      rebuild(); if (!order.length) { filter = 'all'; $('bt-filter').value = 'all'; rebuild(); }
+      render();
+    })();
+  </script>
+</Layout>

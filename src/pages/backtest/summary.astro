@@ -1,0 +1,90 @@
+---
+import Layout from '../../components/Layout.astro';
+import { supabase } from '../../lib/supabase';
+import { toItems, summarize, typeLabel, TYPE_LABELS } from '../../lib/backtest';
+
+// Зведення бектесту: частка «так би і я» по кожному типу ситуації (від розмічених).
+const { data, error } = await supabase
+  .from('backtest_situations')
+  .select('*, backtest_drafts(*), backtest_decisions(*)')
+  .order('sort_order');
+const items = toItems(data ?? []);
+const rows = summarize(items);
+const sum = (list: typeof items) => summarize(list.map((i) => ({ ...i, type: 'all' })))[0];
+const total = items.length ? sum(items) : null;
+const archive = items.some((i) => i.kind === 'archive') ? sum(items.filter((i) => i.kind === 'archive')) : null;
+const synthetic = items.some((i) => i.kind === 'synthetic') ? sum(items.filter((i) => i.kind === 'synthetic')) : null;
+const pct = (n: number, d: number) => (d ? `${Math.round((100 * n) / d)}%` : '—');
+const notIt = items.filter((i) => i.decision && i.decision.verdict !== 'same');
+const cell = 'py-2.5 pr-4 text-right tabular-nums';
+const head = 'py-2 pr-4 text-right font-medium';
+---
+
+<Layout title="Backtest summary">
+  <div class="mb-6 flex flex-wrap items-end justify-between gap-4">
+    <div>
+      <h1 class="text-2xl font-bold">Backtest summary</h1>
+      <p class="text-gray-500 text-sm mt-1">Share of “same as I would” among the situations you have marked, by situation type.</p>
+    </div>
+    <a href="/backtest" class="text-sm text-accent hover:underline">← Back to marking</a>
+  </div>
+
+  {error && <div class="mb-4 bg-danger/10 border border-danger/30 text-danger text-sm rounded-lg px-4 py-3 max-w-2xl">Could not load the summary. Try again in a minute.</div>}
+
+  {!total ? (
+    <div class="bg-card rounded-xl border border-border p-16 text-center max-w-3xl"><p class="text-gray-400">No backtest loaded yet.</p></div>
+  ) : (
+    <div class="max-w-5xl space-y-8">
+      <div class="grid gap-4 sm:grid-cols-3">
+        {[['All', total], ['Archive', archive], ['Synthetic', synthetic]].map(([name, s]: any) => s && (
+          <div class="bg-card border border-border rounded-xl p-5">
+            <p class="text-xs uppercase tracking-wide text-gray-500">{name}</p>
+            <p class="text-3xl font-bold mt-1">{pct(s.same, s.marked)}</p>
+            <p class="text-xs text-gray-500 mt-1">same as I would · marked {s.marked} of {s.total}</p>
+          </div>
+        ))}
+      </div>
+
+      <div class="bg-card border border-border rounded-xl p-5 overflow-x-auto">
+        <table class="w-full text-sm">
+          <thead>
+            <tr class="text-xs uppercase text-gray-500 border-b border-border">
+              <th class="py-2 pr-4 text-left font-medium">Situation type</th>
+              <th class={head}>Marked</th><th class={head}>Same</th><th class={head}>Not it</th><th class={head}>My version</th><th class={head}>Same, % of marked</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((r) => (
+              <tr class="border-b border-border/60 last:border-0">
+                <td class="py-2.5 pr-4">{typeLabel(r.type)}{TYPE_LABELS[r.type]?.red && <span class="ml-2 text-xs text-danger">for you</span>}</td>
+                <td class={cell}>{r.marked}/{r.total}</td>
+                <td class={cell}>{r.same}</td>
+                <td class={cell}>{r.no}</td>
+                <td class={cell}>{r.edited}</td>
+                <td class={`${cell} font-semibold ${r.marked && r.same / r.marked >= 0.9 ? 'text-success' : ''}`}>{pct(r.same, r.marked)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        <p class="text-xs text-gray-600 mt-4">“For you” types: the agent does not answer them itself, so “same” there means “right, this is for me”.</p>
+      </div>
+
+      {notIt.length > 0 && (
+        <div>
+          <h2 class="text-lg font-semibold mb-3">Where the draft was not it ({notIt.length})</h2>
+          <div class="space-y-3">
+            {notIt.map((i) => (
+              <div class="bg-card border border-border rounded-xl p-4 text-sm">
+                <p class="text-xs text-gray-500 mb-2">{typeLabel(i.type)} · {i.decision!.verdict === 'edited' ? 'my version' : 'not it'}</p>
+                <p class="text-gray-400 mb-2 whitespace-pre-wrap break-words"><span class="text-gray-600">Partner: </span>{i.partner}</p>
+                <p class="text-gray-300 mb-2 whitespace-pre-wrap break-words"><span class="text-gray-600">Agent: </span>{i.draft ? (i.draft.route === 'draft' ? i.draft.messages.join(' / ') : `(${i.draft.route === 'human' ? 'handed to you' : 'no ping'})`) : '—'}</p>
+                {i.decision!.editedText && <p class="text-gray-100 whitespace-pre-wrap break-words"><span class="text-gray-600">You: </span>{i.decision!.editedText}</p>}
+                {i.decision!.note && <p class="text-xs text-amber-300 mt-2">Note: {i.decision!.note}</p>}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  )}
+</Layout>
