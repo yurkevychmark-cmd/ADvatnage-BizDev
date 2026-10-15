@@ -1,14 +1,10 @@
 ---
 import Layout from '../../components/Layout.astro';
 import { supabase } from '../../lib/supabase';
-import { toItems, summarize, typeLabel, TYPE_LABELS } from '../../lib/backtest';
+import { loadRun, summarize, typeLabel, TYPE_LABELS, RUN_LABELS } from '../../lib/backtest';
 
 // Зведення бектесту: частка «так би і я» по кожному типу ситуації (від розмічених).
-const { data, error } = await supabase
-  .from('backtest_situations')
-  .select('*, backtest_drafts(*), backtest_decisions(*)')
-  .order('sort_order');
-const items = toItems(data ?? []);
+const { runs, run, items, error } = await loadRun(supabase, Astro.url.searchParams.get('run'));
 const rows = summarize(items);
 const sum = (list: typeof items) => summarize(list.map((i) => ({ ...i, type: 'all' })))[0];
 const total = items.length ? sum(items) : null;
@@ -26,7 +22,14 @@ const head = 'py-2 pr-4 text-right font-medium';
       <h1 class="text-2xl font-bold">Backtest summary</h1>
       <p class="text-gray-500 text-sm mt-1">Share of “same as I would” among the situations you have marked, by situation type.</p>
     </div>
-    <a href="/backtest" class="text-sm text-accent hover:underline">← Back to marking</a>
+    <div class="flex items-center gap-4">
+      {runs.length > 1 && (
+        <nav class="flex gap-1 text-xs">
+          {runs.map((r) => <a href={`/backtest/summary?run=${r}`} class={`px-2.5 py-1.5 rounded-md border ${r === run ? 'border-accent text-gray-100' : 'border-border text-gray-500 hover:text-gray-300'}`}>{RUN_LABELS[r] ?? r}</a>)}
+        </nav>
+      )}
+      <a href={`/backtest?run=${run ?? ''}`} class="text-sm text-accent hover:underline">← Back to marking</a>
+    </div>
   </div>
 
   {error && <div class="mb-4 bg-danger/10 border border-danger/30 text-danger text-sm rounded-lg px-4 py-3 max-w-2xl">Could not load the summary. Try again in a minute.</div>}

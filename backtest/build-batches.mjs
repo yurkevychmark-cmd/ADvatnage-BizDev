@@ -18,6 +18,7 @@ const archive = JSON.parse(fs.readFileSync(selFile, 'utf8')).map((r, i) => ({
   id: `a${String(i + 1).padStart(2, '0')}`, kind: 'archive', type: r.type,
   source: { chat: r.chat, title: r.title, ts: r.ts },
   context: r.context, partner: r.partner, realReply: r.reply, card: null,
+  partnerAuthor: r.partnerAuthor ?? null, partnerRole: r.partnerRole ?? null,
 }));
 const synthetic = JSON.parse(fs.readFileSync(synFile, 'utf8')).map((r, i) => ({
   id: `s${String(i + 1).padStart(2, '0')}`, kind: 'synthetic', type: r.type,
@@ -35,9 +36,9 @@ const show = (s) => {
   else lines.push('Картки угоди немає: це розмова з архіву, у ній лише те, що видно нижче. Чого бракує — не вигадуй.');
   if (s.context.length) {
     lines.push('Попередні повідомлення (старіші зверху):');
-    for (const m of s.context) lines.push(`- ${m.ours ? 'МИ' : 'ПАРТНЕР'} (${m.author}): ${m.text.replace(/\n/g, ' ⏎ ')}`);
+    for (const m of s.context) lines.push(`- ${m.role ? `${m.author}, ${m.role}` : `${m.ours ? 'МИ' : 'ПАРТНЕР'} (${m.author})`}: ${m.text.replace(/\n/g, ' ⏎ ')}`);
   }
-  lines.push('Нове повідомлення партнера:', '"""', s.partner, '"""');
+  lines.push(s.partnerAuthor ? `Нове повідомлення — ${s.partnerAuthor} (${s.partnerRole}):` : 'Нове повідомлення партнера:', '"""', s.partner, '"""');
   return lines.join('\n');
 };
 
@@ -52,15 +53,25 @@ for (const a of all) {
     if (a !== b && b.context.some((m) => m.text.includes(key))) { conflicts.get(a.id).add(b.id); conflicts.get(b.id).add(a.id); }
   }
 }
-const nBatches = Math.ceil(shuffled.length / SIZE);
-const batches = Array.from({ length: nBatches }, () => []);
-shuffled.forEach((s, i) => {
-  for (let k = 0; k < nBatches; k++) {
-    const b = batches[(i + k) % nBatches];
-    if (b.length < SIZE && !b.some((x) => conflicts.get(s.id).has(x.id))) { b.push(s); return; }
+// Жадібне розкладання; не вдалося — більше пачок (у густих чатах відповідь однієї ситуації стоїть
+// у контексті кількох інших).
+function pack(nBatches) {
+  const out = Array.from({ length: nBatches }, () => []);
+  for (const [i, s] of shuffled.entries()) {
+    let placed = false;
+    for (let k = 0; k < nBatches && !placed; k++) {
+      const b = out[(i + k) % nBatches];
+      if (b.length < SIZE && !b.some((x) => conflicts.get(s.id).has(x.id))) { b.push(s); placed = true; }
+    }
+    if (!placed) return null;
   }
-  throw new Error(`не вдалося розкласти ${s.id} по пачках без конфлікту`);
-});
+  return out.filter((b) => b.length);
+}
+let batches = null;
+for (let n = Math.ceil(shuffled.length / SIZE); !batches; n++) {
+  if (n > shuffled.length) throw new Error('не вдалося розкласти ситуації по пачках без конфлікту');
+  batches = pack(n);
+}
 batches.forEach((b, n) => {
   const text = `Ти — BizDev-менеджер: складаєш ЧЕРНЕТКИ відповідей партнерам від імені робочого акаунта. Нічого нікуди не надсилається; чернетки побачить Марко й розмітить.
 
@@ -76,6 +87,8 @@ ${style}
 - route "draft" — це в межах «Сам» або «Пропонує Марку»: пишеш чернетку відповіді партнеру;
 - route "human" — це з «Ніколи сам» (гроші, ставки, інвойси, гаманці, продовження умов, суперечки про результат, бани, сірі теми, «ти бот?»): чернетки немає;
 - route "none" — для «партнер замовк»: приводу для пінга немає, тож нічого не пишеш.
+
+Ти пишеш від нашої команди (ADvantage, BizDev). У групах зазвичай є оператор (казино) і наш баєр; відповідай тому, кому треба, за потреби тегни людину.
 
 Правила чернетки: англійською (мовою партнера); 1–3 короткі повідомлення, як у живому чаті; без тире, списків і заборонених слів зі стильового профілю; цифри й умови лише з картки; чого немає в картці чи в розмові — не вигадуй, у чернетці напиши, що перевіриш, а в "card_gap" назви, чого бракує. Для «партнер замовк» чернетка — це пінг із названим приводом.
 

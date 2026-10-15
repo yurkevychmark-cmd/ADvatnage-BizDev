@@ -36,6 +36,7 @@ const rows = situations.map((s, i) => {
     id: `${runId}-${s.id}`, run_id: runId, kind: s.kind, situation_type: s.type,
     source_chat: s.source?.chat ?? null, source_title: s.source?.title ?? null, source_ts: s.source?.ts ?? null,
     card: s.card, context: s.context, partner_message: s.partner, real_reply: s.realReply, sort_order: i + 1,
+    partner_author: s.partnerAuthor ?? null, partner_role: s.partnerRole ?? null,
     draft: { route: d.route, messages: d.messages, why: String(d.why).trim(), card_gap: d.card_gap ?? null },
   };
 });
@@ -46,11 +47,12 @@ if (json.includes(`$${tag}$`)) throw new Error('збіг тега');
 const sql = `
 begin;
 with data as (select $${tag}$${json}$${tag}$::jsonb as d), r as (select jsonb_array_elements(d) as x from data)
-insert into backtest_situations (id, run_id, kind, situation_type, source_chat, source_title, source_ts, card, context, partner_message, real_reply, sort_order)
+insert into backtest_situations (id, run_id, kind, situation_type, source_chat, source_title, source_ts, card, context, partner_message, real_reply, sort_order, partner_author, partner_role)
 select x->>'id', x->>'run_id', x->>'kind', x->>'situation_type', x->>'source_chat', x->>'source_title', x->>'source_ts',
-       nullif(x->'card', 'null'::jsonb), x->'context', x->>'partner_message', x->>'real_reply', (x->>'sort_order')::int from r
+       nullif(x->'card', 'null'::jsonb), x->'context', x->>'partner_message', x->>'real_reply', (x->>'sort_order')::int, x->>'partner_author', x->>'partner_role' from r
 on conflict (id) do update set situation_type = excluded.situation_type, source_title = excluded.source_title, card = excluded.card,
-  context = excluded.context, partner_message = excluded.partner_message, real_reply = excluded.real_reply, sort_order = excluded.sort_order;
+  context = excluded.context, partner_message = excluded.partner_message, real_reply = excluded.real_reply, sort_order = excluded.sort_order,
+  partner_author = excluded.partner_author, partner_role = excluded.partner_role;
 with data as (select $${tag}$${json}$${tag}$::jsonb as d), r as (select jsonb_array_elements(d) as x from data)
 insert into backtest_drafts (situation_id, route, messages, why, card_gap, model)
 select x->>'id', x->'draft'->>'route', x->'draft'->'messages', x->'draft'->>'why', x->'draft'->>'card_gap', ${"'" + model.replace(/'/g, "''") + "'"} from r

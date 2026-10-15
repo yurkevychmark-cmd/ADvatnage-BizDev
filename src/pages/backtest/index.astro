@@ -1,16 +1,11 @@
 ---
 import Layout from '../../components/Layout.astro';
 import { supabase } from '../../lib/supabase';
-import { toItems, typeLabel, TYPE_LABELS } from '../../lib/backtest';
+import { loadRun, typeLabel, TYPE_LABELS, RUN_LABELS } from '../../lib/backtest';
 
 // Бектест BizDev-агента (таск cfb5898d): ситуації з архіву й синтетичні, чернетка агента, розмітка.
 // Агент писав чернетки, не бачачи справжніх відповідей; нічого нікуди не надсилається.
-const { data, error } = await supabase
-  .from('backtest_situations')
-  .select('*, backtest_drafts(*), backtest_decisions(*)')
-  .order('sort_order');
-
-const items = toItems(data ?? []);
+const { runs, run, items, error } = await loadRun(supabase, Astro.url.searchParams.get('run'));
 const types = [...new Set(items.map((i) => i.type))];
 const payload = JSON.stringify({
   items,
@@ -24,7 +19,14 @@ const payload = JSON.stringify({
       <h1 class="text-2xl font-bold">Backtest</h1>
       <p class="text-gray-500 text-sm mt-1">The agent wrote a draft for each situation without seeing the real reply. Mark each one. Nothing is sent anywhere.</p>
     </div>
-    <a href="/backtest/summary" class="text-sm text-accent hover:underline">Summary by situation type →</a>
+    <div class="flex items-center gap-4">
+      {runs.length > 1 && (
+        <nav class="flex gap-1 text-xs">
+          {runs.map((r) => <a href={`/backtest?run=${r}`} class={`px-2.5 py-1.5 rounded-md border ${r === run ? 'border-accent text-gray-100' : 'border-border text-gray-500 hover:text-gray-300'}`}>{RUN_LABELS[r] ?? r}</a>)}
+        </nav>
+      )}
+      <a href={`/backtest/summary?run=${run ?? ''}`} class="text-sm text-accent hover:underline">Summary by situation type →</a>
+    </div>
   </div>
 
   {error && <div class="mb-4 bg-danger/10 border border-danger/30 text-danger text-sm rounded-lg px-4 py-3 max-w-2xl">Could not load the backtest. Try again in a minute.</div>}
@@ -52,7 +54,7 @@ const payload = JSON.stringify({
 
       <div id="bt-empty" class="hidden bg-card rounded-xl border border-border p-12 text-center">
         <p class="text-gray-300 text-lg mb-2">Nothing left in this filter</p>
-        <p class="text-gray-500 text-sm">Switch the filter to “All situations”, or open the <a href="/backtest/summary" class="text-accent hover:underline">summary</a>.</p>
+        <p class="text-gray-500 text-sm">Switch the filter to “All situations”, or open the <a href={`/backtest/summary?run=${run ?? ''}`} class="text-accent hover:underline">summary</a>.</p>
       </div>
 
       <div id="bt-card" class="grid gap-5 lg:grid-cols-2">
@@ -63,7 +65,7 @@ const payload = JSON.stringify({
             <summary class="text-xs text-gray-500 cursor-pointer">Previous messages</summary>
             <div id="bt-ctx" class="mt-2 space-y-1.5 max-h-56 overflow-y-auto pr-1"></div>
           </details>
-          <p class="text-xs uppercase tracking-wide text-gray-500 mb-1.5">Partner wrote</p>
+          <p class="text-xs uppercase tracking-wide text-gray-500 mb-1.5" id="bt-partner-label">Partner wrote</p>
           <div id="bt-partner" class="rounded-lg bg-card-2 border border-border px-3 py-2.5 text-sm text-gray-200 whitespace-pre-wrap break-words"></div>
         </section>
 
@@ -173,10 +175,12 @@ const payload = JSON.stringify({
 
         var ctx = $('bt-ctx'); ctx.textContent = '';
         (it.context || []).forEach(function (m) {
-          ctx.appendChild(bubble((m.ours ? 'We' : 'Partner') + ' (' + m.author + '): ' + m.text, m.ours ? 'bg-accent/10 text-gray-300 text-xs' : 'bg-card-2 text-gray-400 text-xs'));
+          var who = m.role ? m.author + ', ' + m.role : (m.ours ? 'We' : 'Partner') + ' (' + m.author + ')';
+          ctx.appendChild(bubble(who + ': ' + m.text, m.ours ? 'bg-accent/10 text-gray-300 text-xs' : 'bg-card-2 text-gray-400 text-xs'));
         });
         $('bt-ctx-wrap').classList.toggle('hidden', !(it.context && it.context.length));
         $('bt-partner').textContent = it.partner;
+        $('bt-partner-label').textContent = it.partnerAuthor ? it.partnerAuthor + ' (' + it.partnerRole + ') wrote' : 'Partner wrote';
 
         var dr = it.draft, draft = $('bt-draft'); draft.textContent = '';
         var route = $('bt-route'); route.textContent = '';

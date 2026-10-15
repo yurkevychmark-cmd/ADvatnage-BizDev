@@ -8,14 +8,18 @@ export const TYPE_LABELS: Record<string, { label: string; red?: boolean }> = {
   advice: { label: 'Work advice' },
   results: { label: 'Results & numbers' },
   smalltalk: { label: 'Thanks & small talk' },
-  money: { label: 'Money & terms', red: true },
-  ban: { label: 'Bans, complaints, disputes', red: true },
+  money: { label: 'Money, payments & deal terms', red: true },
+  ban: { label: 'Bans, disputes, pausing the deal', red: true },
   botq: { label: '“Are you a bot?”', red: true },
   trial_start: { label: 'Trial start' },
   weak_numbers: { label: 'Weak numbers' },
   new_geo: { label: 'New geo request' },
   report_late: { label: 'Report is late' },
   partner_silent: { label: 'Partner went quiet' },
+  integration: { label: 'Integration & access' },
+  creatives: { label: 'Creatives' },
+  next_steps: { label: 'Status & next steps' },
+  relay: { label: 'Buyer ↔ operator coordination' },
   other: { label: 'Other' },
 };
 
@@ -31,8 +35,10 @@ export interface BacktestItem {
   title: string | null;
   ts: string | null;
   card: Record<string, unknown> | null;
-  context: { ours: boolean; author: string; ts?: string; text: string }[];
+  context: { ours: boolean; author: string; role?: string; ts?: string; text: string }[];
   partner: string;
+  partnerAuthor: string | null;
+  partnerRole: string | null;
   realReply: string | null;
   draft: { route: 'draft' | 'human' | 'none'; messages: string[]; why: string | null; cardGap: string | null; model: string } | null;
   decision: { verdict: Verdict; editedText: string | null; note: string | null; decidedBy: string | null; decidedAt: string } | null;
@@ -54,11 +60,34 @@ export function toItems(rows: any[]): BacktestItem[] {
       card: r.card,
       context: r.context ?? [],
       partner: r.partner_message,
+      partnerAuthor: r.partner_author ?? null,
+      partnerRole: r.partner_role ?? null,
       realReply: r.real_reply,
       draft: d ? { route: d.route, messages: d.messages ?? [], why: d.why, cardGap: d.card_gap, model: d.model } : null,
       decision: x ? { verdict: x.verdict, editedText: x.edited_text, note: x.note, decidedBy: x.decided_by, decidedAt: x.decided_at } : null,
     };
   });
+}
+
+/** Прогони бектесту, новіший першим (bt1 — чати менторства, bt2 — BizDev-чати по трафіку). */
+export const RUN_LABELS: Record<string, string> = {
+  bt1: 'Run 1 · mentorship chats',
+  bt2: 'Run 2 · BizDev traffic chats',
+};
+
+export async function loadRun(supabase: any, requested: string | null) {
+  const { data: runRows } = await supabase.from('backtest_situations').select('run_id, created_at');
+  const latest = new Map<string, string>();
+  for (const r of runRows ?? []) if (!latest.has(r.run_id) || r.created_at > latest.get(r.run_id)!) latest.set(r.run_id, r.created_at);
+  const runs = [...latest.entries()].sort((a, b) => b[1].localeCompare(a[1])).map(([id]) => id);
+  const run = requested && runs.includes(requested) ? requested : runs[0] ?? null;
+  if (!run) return { runs, run, items: [] as BacktestItem[], error: null };
+  const { data, error } = await supabase
+    .from('backtest_situations')
+    .select('*, backtest_drafts(*), backtest_decisions(*)')
+    .eq('run_id', run)
+    .order('sort_order');
+  return { runs, run, items: toItems(data ?? []), error };
 }
 
 export interface TypeSummary {

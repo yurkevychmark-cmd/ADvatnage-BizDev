@@ -45,3 +45,8 @@ create table if not exists public.backtest_decisions (
 );
 
 notify pgrst, 'reload schema';
+
+-- bt2 (15.10): BizDev-чати по трафіку — у групі пишуть і оператор, і наш баєр; зберігаємо, хто саме.
+alter table public.backtest_situations add column if not exists partner_author text;
+alter table public.backtest_situations add column if not exists partner_role text;
+notify pgrst, 'reload schema';

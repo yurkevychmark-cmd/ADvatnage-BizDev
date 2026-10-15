@@ -41,17 +41,18 @@ export function minutesBetween(a, b) {
 
 /**
  * Кандидати: пачка повідомлень клієнта (підряд, не більше 10 хв між ними), після якої наша
- * сторона відповідає першою — не пізніше ніж за 45 хвилин (далі відповідь, найімовірніше, про інше). Контекст — до 6 попередніх повідомлень.
+ * сторона відповідає першою — не пізніше ніж за maxReplyMinutes (для чатів менторства 45 хв: далі
+ * відповідь, найімовірніше, про інше). Повідомлення staff (Павло, Степан) — ні партнер, ні відповідь. Контекст — до 6 попередніх повідомлень.
  */
-export function candidates(chat) {
+export function candidates(chat, { maxReplyMinutes = 45 } = {}) {
   const { msgs } = chat;
   const out = [];
   for (let i = 0; i < msgs.length; i++) {
-    if (msgs[i].ours) continue;
+    if (msgs[i].ours || msgs[i].staff) continue;
     let j = i;
-    while (j + 1 < msgs.length && !msgs[j + 1].ours && minutesBetween(msgs[j].ts, msgs[j + 1].ts) <= 10) j++;
+    while (j + 1 < msgs.length && !msgs[j + 1].ours && !msgs[j + 1].staff && minutesBetween(msgs[j].ts, msgs[j + 1].ts) <= 10) j++;
     const reply = msgs[j + 1];
-    if (reply?.ours && minutesBetween(msgs[j].ts, reply.ts) <= 45) {
+    if (reply?.ours && minutesBetween(msgs[j].ts, reply.ts) <= maxReplyMinutes) {
       // наші репліки підряд (одна думка в 1–3 повідомлення) — це одна відповідь
       let k = j + 1;
       while (k + 1 < msgs.length && msgs[k + 1].ours && msgs[k + 1].author === reply.author

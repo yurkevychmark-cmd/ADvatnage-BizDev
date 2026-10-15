@@ -1,0 +1,302 @@
+[
+ {
+  "chat": "bizdev-king-go",
+  "ts": "2026-06-16 19:00",
+  "author": "Luke",
+  "type": "money"
+ },
+ {
+  "chat": "bizdev-monroll",
+  "ts": "2026-06-25 11:14",
+  "author": "Greg",
+  "type": "money"
+ },
+ {
+  "chat": "bizdev-monroll",
+  "ts": "2026-08-18 10:16",
+  "author": "Kim",
+  "type": "money"
+ },
+ {
+  "chat": "bizdev-sezin",
+  "ts": "2026-08-18 13:14",
+  "author": "Sezin",
+  "type": "money"
+ },
+ {
+  "chat": "bizdev-advantage-10panda-technologies",
+  "ts": "2026-03-23 11:24",
+  "author": "Alex",
+  "type": "money"
+ },
+ {
+  "chat": "bizdev-advantage-10panda-technologies",
+  "ts": "2026-03-25 11:51",
+  "author": "Alex",
+  "type": "money"
+ },
+ {
+  "chat": "bizdev-advantage-10panda-technologies",
+  "ts": "2026-05-08 00:52",
+  "author": "Alex",
+  "type": "money"
+ },
+ {
+  "chat": "bizdev-advantage-10panda-technologies",
+  "ts": "2026-05-08 09:51",
+  "author": "Alex",
+  "type": "money"
+ },
+ {
+  "chat": "bizdev-monroll",
+  "ts": "2026-08-21 09:15",
+  "author": "Kim",
+  "type": "ban"
+ },
+ {
+  "chat": "bizdev-sezin",
+  "ts": "2026-07-06 16:04",
+  "author": "Denisa Andreea",
+  "type": "ban"
+ },
+ {
+  "chat": "bizdev-sezin",
+  "ts": "2026-08-14 11:21",
+  "author": "Sezin",
+  "type": "ban"
+ },
+ {
+  "chat": "bizdev-king-go",
+  "ts": "2026-06-18 08:50",
+  "author": "Luke",
+  "type": "integration"
+ },
+ {
+  "chat": "bizdev-king-go",
+  "ts": "2026-07-07 14:14",
+  "author": "Luke",
+  "type": "integration"
+ },
+ {
+  "chat": "bizdev-king-go",
+  "ts": "2026-08-19 10:38",
+  "author": "Luke",
+  "type": "integration"
+ },
+ {
+  "chat": "bizdev-sezin",
+  "ts": "2026-05-19 10:19",
+  "author": "Sezin",
+  "type": "integration"
+ },
+ {
+  "chat": "bizdev-sezin",
+  "ts": "2026-05-20 14:42",
+  "author": "Sezin",
+  "type": "integration"
+ },
+ {
+  "chat": "bizdev-sezin",
+  "ts": "2026-05-22 12:58",
+  "author": "Sezin",
+  "type": "integration"
+ },
+ {
+  "chat": "bizdev-sezin",
+  "ts": "2026-05-28 12:08",
+  "author": "Sezin",
+  "type": "integration"
+ },
+ {
+  "chat": "bizdev-advantage-10panda-technologies",
+  "ts": "2026-05-07 17:33",
+  "author": "Alex",
+  "type": "integration"
+ },
+ {
+  "chat": "bizdev-king-go",
+  "ts": "2026-06-18 08:44",
+  "author": "Luke",
+  "type": "creatives"
+ },
+ {
+  "chat": "bizdev-king-go",
+  "ts": "2026-06-19 09:49",
+  "author": "Luke",
+  "type": "creatives"
+ },
+ {
+  "chat": "bizdev-king-go",
+  "ts": "2026-06-20 13:04",
+  "author": "Luke",
+  "type": "creatives"
+ },
+ {
+  "chat": "bizdev-king-go",
+  "ts": "2026-06-20 13:07",
+  "author": "Luke",
+  "type": "creatives"
+ },
+ {
+  "chat": "bizdev-sezin",
+  "ts": "2026-08-19 09:54",
+  "author": "Sezin",
+  "type": "creatives"
+ },
+ {
+  "chat": "bizdev-king-go",
+  "ts": "2026-06-24 19:00",
+  "author": "Luke",
+  "type": "next_steps"
+ },
+ {
+  "chat": "bizdev-monroll",
+  "ts": "2026-10-01 11:45",
+  "author": "Greg",
+  "type": "next_steps"
+ },
+ {
+  "chat": "bizdev-monroll",
+  "ts": "2026-10-06 10:27",
+  "author": "Greg",
+  "type": "next_steps"
+ },
+ {
+  "chat": "bizdev-monroll",
+  "ts": "2026-10-06 10:35",
+  "author": "Greg",
+  "type": "next_steps"
+ },
+ {
+  "chat": "bizdev-monroll",
+  "ts": "2026-10-06 15:05",
+  "author": "Kim",
+  "type": "next_steps"
+ },
+ {
+  "chat": "bizdev-advantage-10panda-technologies",
+  "ts": "2026-05-07 17:00",
+  "author": "Alex",
+  "type": "next_steps"
+ },
+ {
+  "chat": "bizdev-advantage-10panda-technologies",
+  "ts": "2026-05-08 08:36",
+  "author": "Alex",
+  "type": "next_steps"
+ },
+ {
+  "chat": "bizdev-monroll",
+  "ts": "2026-10-06 11:08",
+  "author": "Kim",
+  "type": "results"
+ },
+ {
+  "chat": "bizdev-monroll",
+  "ts": "2026-10-06 14:57",
+  "author": "Kim",
+  "type": "results"
+ },
+ {
+  "chat": "bizdev-sezin",
+  "ts": "2026-09-28 12:03",
+  "author": "Sezin",
+  "type": "results"
+ },
+ {
+  "chat": "bizdev-advantage-2up-io",
+  "ts": "2026-04-28 12:38",
+  "author": "Микола",
+  "type": "results"
+ },
+ {
+  "chat": "bizdev-advantage-2up-io",
+  "ts": "2026-04-28 15:10",
+  "author": "Alfred 2up.io",
+  "type": "results"
+ },
+ {
+  "chat": "bizdev-monroll",
+  "ts": "2026-10-12 07:31",
+  "author": "Kim",
+  "type": "relay"
+ },
+ {
+  "chat": "bizdev-monroll",
+  "ts": "2026-10-12 11:20",
+  "author": "Kim",
+  "type": "relay"
+ },
+ {
+  "chat": "bizdev-sezin",
+  "ts": "2026-05-19 12:25",
+  "author": "Sezin",
+  "type": "relay"
+ },
+ {
+  "chat": "bizdev-sezin",
+  "ts": "2026-08-17 12:47",
+  "author": "Sezin",
+  "type": "relay"
+ },
+ {
+  "chat": "bizdev-sezin",
+  "ts": "2026-08-18 15:53",
+  "author": "Sezin",
+  "type": "relay"
+ },
+ {
+  "chat": "bizdev-advantage-2up-io",
+  "ts": "2026-04-29 09:17",
+  "author": "Alfred 2up.io",
+  "type": "relay"
+ },
+ {
+  "chat": "bizdev-sezin",
+  "ts": "2026-05-19 13:15",
+  "author": "Sezin",
+  "type": "scheduling"
+ },
+ {
+  "chat": "bizdev-sezin",
+  "ts": "2026-07-01 10:50",
+  "author": "Sezin",
+  "type": "scheduling"
+ },
+ {
+  "chat": "bizdev-sezin",
+  "ts": "2026-09-30 13:31",
+  "author": "Sezin",
+  "type": "scheduling"
+ },
+ {
+  "chat": "bizdev-king-go",
+  "ts": "2026-06-17 14:04",
+  "author": "Luke",
+  "type": "smalltalk"
+ },
+ {
+  "chat": "bizdev-king-go",
+  "ts": "2026-08-19 11:28",
+  "author": "Luke",
+  "type": "smalltalk"
+ },
+ {
+  "chat": "bizdev-monroll",
+  "ts": "2026-06-22 15:14",
+  "author": "Kim",
+  "type": "smalltalk"
+ },
+ {
+  "chat": "bizdev-sezin",
+  "ts": "2026-05-28 16:58",
+  "author": "Sezin",
+  "type": "smalltalk"
+ },
+ {
+  "chat": "bizdev-advantage-10panda-technologies",
+  "ts": "2026-03-25 17:39",
+  "author": "Alex",
+  "type": "smalltalk"
+ }
+]

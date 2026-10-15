@@ -23,10 +23,18 @@ export const SYNTHETIC_TYPES = [
   { slug: 'partner_silent', label: 'Партнер замовк', red: false },
 ];
 
+// Типи BizDev-чатів по трафіку (бектест bt2, правка Марка 15.10): розмова про угоду, а не навчання.
+export const BIZDEV_TYPES = [
+  { slug: 'integration', label: 'Інтеграція й доступи', red: false },
+  { slug: 'creatives', label: 'Креативи', red: false },
+  { slug: 'next_steps', label: 'Статус і наступні кроки', red: false },
+  { slug: 'relay', label: 'Координація баєра й оператора', red: false },
+];
+
 export const SMALLTALK = { slug: 'smalltalk', label: 'Подяка й підтримка розмови', red: false };
 export const OTHER = { slug: 'other', label: 'Інше', red: false };
 
-export const ALL_TYPES = [...TYPES, ...SYNTHETIC_TYPES, SMALLTALK, OTHER];
+export const ALL_TYPES = [...TYPES, ...SYNTHETIC_TYPES, ...BIZDEV_TYPES, SMALLTALK, OTHER];
 export const typeInfo = (slug) => ALL_TYPES.find((t) => t.slug === slug) ?? OTHER;
 
 /** Перший тип, чий шаблон збігся; без збігу — «подяка» для коротких і «інше» для решти. */
