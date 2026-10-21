@@ -76,8 +76,22 @@ export function clearSessionCookie(cookies: AstroCookies) {
   cookies.delete(SESSION_COOKIE, { path: '/' });
 }
 
-/** Куди повернути після входу: лише шлях на цьому ж сайті. */
+/**
+ * Куди повернути після входу: лише шлях на цьому ж сайті.
+ * Браузер, розбираючи Location, викидає таби й переводи рядка і читає зворотну косу як «/»:
+ * «/<таб>/evil.example» для нього — //evil.example, тобто чужий сайт (21.10, таск
+ * 89eab74a). Тож керівні символи й зворотна коса відкидаються будь-де, а результат
+ * ще раз розбирається як URL і мусить лишитися на тому самому origin.
+ */
 export function safeNext(raw: string | null | undefined): string {
-  if (!raw || !raw.startsWith('/') || raw.startsWith('//') || raw.startsWith('/\\')) return '/';
-  return raw;
+  if (!raw || !raw.startsWith('/') || raw.startsWith('//')) return '/';
+  if (/[\u0000-\u001f\u007f\\]/.test(raw)) return '/';
+  try {
+    const base = 'https://same-origin.invalid';
+    const u = new URL(raw, base);
+    if (u.origin !== base) return '/';
+    return u.pathname + u.search + u.hash;
+  } catch {
+    return '/';
+  }
 }
