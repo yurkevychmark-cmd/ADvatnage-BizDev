@@ -56,6 +56,10 @@ services:
     depends_on: [bizdev-rest]
     networks: [bizdev-net, coolify]
     labels:
+      # Коміт, з якого зібрано образ (ставить deploy/deploy.sh): deploy_verify.py black-oracle
+      # звіряє його з комітом таска. «-dirty» — задеплоєно незакомічене; «unknown» — підняли
+      # не через deploy.sh.
+      org.opencontainers.image.revision: ${BIZDEV_REVISION:-unknown}
       traefik.enable: "true"
       traefik.docker.network: coolify
       traefik.http.middlewares.bizdev-https-redirect.redirectscheme.scheme: https

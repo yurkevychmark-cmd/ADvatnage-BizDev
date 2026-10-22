@@ -4,8 +4,13 @@
 set -eu
 HOST="${BIZDEV_HOST:-marko@144.91.104.211}"
 cd "$(dirname "$0")/.."
+# Мітка коміту на контейнері — доказ, що на проді саме цей код (таск f846a0ab). rsync везе робоче
+# дерево, тож незакомічені зміни позначаються «-dirty»: deploy_verify.py такого не прийме.
+REV=$(git rev-parse HEAD)
+[ -z "$(git status --porcelain)" ] || REV="$REV-dirty"
+echo "Деплой BizDev · коміт $REV"
 rsync -az --delete --exclude-from=.dockerignore ./ "$HOST:/opt/bizdev/src/"
 rsync -az deploy/docker-compose.yml "$HOST:/opt/bizdev/docker-compose.yml"
 rsync -az --delete deploy/initdb/ "$HOST:/opt/bizdev/initdb/"
 # --pull=false: базові образи вже на сервері (ліміт Docker Hub на анонімні завантаження).
-ssh "$HOST" 'cd /opt/bizdev && docker compose build --pull=false bizdev-portal bizdev-listener && docker compose up -d'
+ssh "$HOST" "cd /opt/bizdev && export BIZDEV_REVISION=$REV && docker compose build --pull=false bizdev-portal bizdev-listener && docker compose up -d"
