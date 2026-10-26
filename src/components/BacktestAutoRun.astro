@@ -1,0 +1,100 @@
+---
+// Прогін автоматичного порівняння (таск cfb5898d): усі пари з BizDev-чатів — чернетка агента, відповідь
+// Марка й оцінка іншої моделі; відсіяні пари окремо з причиною. Ручної розмітки немає.
+import type { AutoItem, FilteredPair } from '../lib/backtest';
+import { typeLabel, TYPE_LABELS, ACTION_LABELS } from '../lib/backtest';
+
+interface Props { items: AutoItem[]; filteredPairs: FilteredPair[]; unsorted: number; run: string; show: string; type: string | null }
+const { items, filteredPairs, unsorted, run, show, type } = Astro.props;
+
+const matched = items.filter((i) => i.ev?.match).length;
+const evaluated = items.filter((i) => i.ev).length;
+const visible = items.filter((i) =>
+  (!type || i.type === type) &&
+  (show === 'all' || (show === 'mismatch' && i.ev && !i.ev.match) || (show === 'match' && i.ev?.match) || (show === 'noeval' && !i.ev)));
+const types = [...new Set(items.map((i) => i.type))];
+const q = (o: Record<string, string | null>) => {
+  const p = new URLSearchParams({ run, show, ...(type ? { type } : {}) });
+  for (const [k, v] of Object.entries(o)) v === null ? p.delete(k) : p.set(k, v);
+  return `/backtest?${p}`;
+};
+const yes = (b: boolean) => (b ? 'text-success' : 'text-danger');
+const act = (a: string | null) => (a ? ACTION_LABELS[a] ?? a : '—');
+const tab = (on: boolean) => `px-2.5 py-1.5 rounded-md border ${on ? 'border-accent text-gray-100' : 'border-border text-gray-500 hover:text-gray-300'}`;
+---
+
+<div class="max-w-6xl space-y-5">
+  <div class="grid gap-3 sm:grid-cols-4 text-sm">
+    <div class="bg-card border border-border rounded-xl p-4"><p class="text-xs uppercase text-gray-500">Pairs compared</p><p class="text-2xl font-bold mt-1">{evaluated}</p><p class="text-xs text-gray-500">of {items.length} relevant pairs</p></div>
+    <div class="bg-card border border-border rounded-xl p-4"><p class="text-xs uppercase text-gray-500">Match with Marko</p><p class="text-2xl font-bold mt-1">{evaluated ? Math.round((100 * matched) / evaluated) : 0}%</p><p class="text-xs text-gray-500">{matched} of {evaluated}</p></div>
+    <div class="bg-card border border-border rounded-xl p-4"><p class="text-xs uppercase text-gray-500">Filtered out</p><p class="text-2xl font-bold mt-1">{filteredPairs.length}</p><p class="text-xs text-gray-500">reply was about something else · <a href="#filtered" class="text-accent hover:underline">see why</a></p></div>
+    <div class="bg-card border border-border rounded-xl p-4"><p class="text-xs uppercase text-gray-500">Not sorted yet</p><p class="text-2xl font-bold mt-1">{unsorted}</p><p class="text-xs text-gray-500">new pairs wait for the next run</p></div>
+  </div>
+
+  <div class="flex flex-wrap items-center gap-1 text-xs">
+    <a href={q({ show: 'mismatch' })} class={tab(show === 'mismatch')}>Mismatches</a>
+    <a href={q({ show: 'match' })} class={tab(show === 'match')}>Matches</a>
+    <a href={q({ show: 'all' })} class={tab(show === 'all')}>All</a>
+    {items.some((i) => !i.ev) && <a href={q({ show: 'noeval' })} class={tab(show === 'noeval')}>Not evaluated</a>}
+    <span class="mx-2 text-gray-700">|</span>
+    <a href={q({ type: null })} class={tab(!type)}>All types</a>
+    {types.map((t) => <a href={q({ type: t })} class={tab(type === t)}>{typeLabel(t)}</a>)}
+  </div>
+
+  {visible.length === 0 && <div class="bg-card border border-border rounded-xl p-10 text-center text-gray-500 text-sm">Nothing in this filter.</div>}
+
+  {visible.map((it) => (
+    <article class="bg-card border border-border rounded-xl p-5 text-sm">
+      <div class="flex flex-wrap items-center gap-2 mb-3 text-xs">
+        <span class={`px-2 py-0.5 rounded-md border ${TYPE_LABELS[it.type]?.red ? 'border-danger/50 text-danger' : 'border-gray-500 text-gray-200'}`}>{typeLabel(it.type)}</span>
+        <span class="px-2 py-0.5 rounded-md border border-border text-gray-400">{it.title} · {it.ts}</span>
+        {it.ev ? <span class={`px-2 py-0.5 rounded-md border ${it.ev.match ? 'border-success/50 text-success' : 'border-danger/50 text-danger'}`}>{it.ev.match ? 'match' : 'mismatch'}</span>
+          : <span class="px-2 py-0.5 rounded-md border border-amber-400/40 text-amber-300">not evaluated</span>}
+      </div>
+      {it.context.length > 0 && (
+        <details class="mb-3">
+          <summary class="text-xs text-gray-500 cursor-pointer">Previous messages ({it.context.length})</summary>
+          <div class="mt-2 space-y-1 text-xs text-gray-400">{it.context.map((m) => <p class="whitespace-pre-wrap break-words"><span class="text-gray-500">{m.author}{m.role ? `, ${m.role}` : ''}:</span> {m.text}</p>)}</div>
+        </details>
+      )}
+      <p class="text-xs uppercase tracking-wide text-gray-500 mb-1">{it.partnerAuthor ?? 'Partner'}{it.partnerRole ? ` (${it.partnerRole})` : ''} wrote</p>
+      <div class="rounded-lg bg-card-2 border border-border px-3 py-2 text-gray-200 whitespace-pre-wrap break-words mb-4">{it.partner}</div>
+      <div class="grid gap-4 md:grid-cols-2">
+        <div class="min-w-0">
+          <p class="text-xs uppercase tracking-wide text-gray-500 mb-1">Agent draft</p>
+          {it.draft?.route === 'draft' ? it.draft.messages.map((m) => <div class="rounded-lg bg-accent/10 border border-accent/30 px-3 py-2 text-gray-100 whitespace-pre-wrap break-words mb-1.5">{m}</div>)
+            : it.draft ? <div class="rounded-lg bg-card-2 border border-border px-3 py-2 text-gray-300">Hands it to Marko, writes nothing to the partner.</div>
+            : <div class="text-gray-500">No draft.</div>}
+          {it.draft?.why && <p class="text-xs text-gray-500 mt-1">Why: {it.draft.why}</p>}
+        </div>
+        <div class="min-w-0">
+          <p class="text-xs uppercase tracking-wide text-gray-500 mb-1">Marko actually wrote</p>
+          <div class="rounded-lg bg-card-2 border border-border px-3 py-2 text-gray-300 whitespace-pre-wrap break-words">{it.realReply}</div>
+        </div>
+      </div>
+      {it.ev && (
+        <dl class="mt-4 grid grid-cols-2 sm:grid-cols-4 gap-x-4 gap-y-1 text-xs">
+          <div><dt class="text-gray-500">Same action</dt><dd class={yes(it.ev.sameAction)}>{it.ev.sameAction ? 'yes' : 'no'} · Marko {act(it.ev.markoAction)}, agent {act(it.ev.agentAction)}</dd></div>
+          <div><dt class="text-gray-500">Invented fact</dt><dd class={yes(!it.ev.inventedFact)}>{it.ev.inventedFact ? `yes${it.ev.inventedWhat ? `: ${it.ev.inventedWhat}` : ''}` : 'no'}</dd></div>
+          <div><dt class="text-gray-500">Tone</dt><dd class={yes(it.ev.toneOk)}>{it.ev.toneOk ? 'like Marko' : 'off'}</dd></div>
+          <div><dt class="text-gray-500">Length</dt><dd class={yes(it.ev.lengthOk)}>{it.ev.lengthRatio === null ? '—' : `${it.ev.lengthRatio.toFixed(1)}× Marko's`}</dd></div>
+        </dl>
+      )}
+      {it.ev?.reason && <p class="mt-2 text-xs text-amber-300">{it.ev.reason}</p>}
+    </article>
+  ))}
+
+  <section id="filtered" class="pt-4">
+    <h2 class="text-lg font-semibold mb-1">Filtered out ({filteredPairs.length})</h2>
+    <p class="text-xs text-gray-500 mb-3">Pairs where Marko’s next message was not a reply to this one. They are not compared and not used as examples.</p>
+    <div class="space-y-2">
+      {filteredPairs.map((p) => (
+        <details class="bg-card border border-border rounded-xl px-4 py-3 text-sm">
+          <summary class="cursor-pointer text-gray-300"><span class="text-xs text-gray-500">{p.title} · {p.ts} · </span>{p.reason ?? 'not about this message'}</summary>
+          <p class="mt-2 text-xs text-gray-400 whitespace-pre-wrap break-words"><span class="text-gray-500">Partner: </span>{p.partner}</p>
+          <p class="mt-1 text-xs text-gray-400 whitespace-pre-wrap break-words"><span class="text-gray-500">Marko: </span>{p.reply}</p>
+        </details>
+      ))}
+    </div>
+  </section>
+</div>

@@ -1,0 +1,86 @@
+---
+import Layout from '../../components/Layout.astro';
+import { supabase } from '../../lib/supabase';
+import { typeLabel } from '../../lib/backtest';
+
+// Приклади агента (таск cfb5898d, критерій 4): відповіді Марка з BizDev-чатів. Агент бере 3–5 найближчих
+// до ситуації. Правка тут діє з наступної чернетки, без деплою.
+const typeFilter = Astro.url.searchParams.get('type');
+let q = (supabase as any).from('agent_examples').select('*').eq('role', 'bizdev').order('ts', { ascending: false });
+if (typeFilter) q = q.eq('situation_type', typeFilter);
+const { data, error } = await q;
+const rows: any[] = data ?? [];
+const { data: allTypes } = await (supabase as any).from('agent_examples').select('situation_type').eq('role', 'bizdev');
+const types = [...new Set(((allTypes ?? []) as any[]).map((r) => r.situation_type).filter(Boolean))].sort();
+const tab = (on: boolean) => `px-2.5 py-1.5 rounded-md border ${on ? 'border-accent text-gray-100' : 'border-border text-gray-500 hover:text-gray-300'}`;
+---
+
+<Layout title="Agent examples">
+  <div class="mb-6 flex flex-wrap items-end justify-between gap-4">
+    <div>
+      <h1 class="text-2xl font-bold">Agent examples</h1>
+      <p class="text-gray-500 text-sm mt-1">Marko’s real replies from the BizDev chats. For every message the agent picks the 3–5 closest ones as a model. Edit a reply or switch an example off: the next draft uses it right away, no deploy.</p>
+    </div>
+    <a href="/backtest" class="text-sm text-accent hover:underline">← Backtest</a>
+  </div>
+
+  {error && <div class="mb-4 bg-danger/10 border border-danger/30 text-danger text-sm rounded-lg px-4 py-3 max-w-2xl">Could not load the examples. Try again in a minute.</div>}
+
+  <div class="flex flex-wrap gap-1 text-xs mb-4">
+    <a href="/backtest/examples" class={tab(!typeFilter)}>All ({(allTypes ?? []).length})</a>
+    {types.map((t) => <a href={`/backtest/examples?type=${t}`} class={tab(typeFilter === t)}>{typeLabel(t)}</a>)}
+  </div>
+
+  {rows.length === 0 ? (
+    <div class="bg-card rounded-xl border border-border p-12 text-center max-w-3xl text-gray-500 text-sm">No examples yet. They appear after the first backtest run sorts the pairs.</div>
+  ) : (
+    <div class="max-w-5xl space-y-3" id="ex-list">
+      {rows.map((e) => (
+        <article class={`bg-card border rounded-xl p-4 text-sm ${e.active ? 'border-border' : 'border-border opacity-50'}`} data-id={e.id}>
+          <div class="flex flex-wrap items-center gap-2 mb-2 text-xs text-gray-500">
+            <span class="px-2 py-0.5 rounded-md border border-gray-500 text-gray-200">{typeLabel(e.situation_type ?? 'other')}</span>
+            <span>{e.chat} · {e.ts}</span>
+            {e.edited_at && <span class="text-amber-300">edited{e.edited_by ? ` by ${e.edited_by}` : ''}</span>}
+            <span class="flex-1"></span>
+            <label class="flex items-center gap-1.5 cursor-pointer"><input type="checkbox" class="ex-active accent-accent" checked={e.active} /> agent uses it</label>
+          </div>
+          <p class="text-gray-400 mb-2 whitespace-pre-wrap break-words"><span class="text-gray-600">{e.partner_author ?? 'Partner'}{e.partner_role ? ` (${e.partner_role})` : ''}: </span>{e.partner_message}</p>
+          <textarea rows="2" class="ex-reply w-full bg-card-2 border border-border rounded-lg px-3 py-2 text-sm text-gray-100 outline-none focus:border-accent">{e.reply}</textarea>
+          <div class="flex items-center gap-3 mt-2">
+            <button class="ex-save hidden px-3 py-1.5 rounded-md border border-accent text-gray-100 text-xs hover:bg-accent/10">Save reply</button>
+            <span class="ex-msg text-xs"></span>
+          </div>
+        </article>
+      ))}
+    </div>
+  )}
+
+  <script is:inline>
+    (function () {
+      function send(card, body, msg) {
+        msg.textContent = 'Saving…'; msg.className = 'ex-msg text-xs text-gray-500';
+        body.id = card.getAttribute('data-id');
+        return fetch('/api/agent-example', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+          .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
+          .then(function (res) {
+            msg.textContent = res.ok ? 'Saved' : (res.j.error || 'Could not save');
+            msg.className = 'ex-msg text-xs ' + (res.ok ? 'text-success' : 'text-danger');
+            return res.ok;
+          })
+          .catch(function () { msg.textContent = 'No connection. Try again.'; msg.className = 'ex-msg text-xs text-danger'; return false; });
+      }
+      document.querySelectorAll('#ex-list article').forEach(function (card) {
+        var ta = card.querySelector('.ex-reply'), save = card.querySelector('.ex-save'), msg = card.querySelector('.ex-msg'), box = card.querySelector('.ex-active');
+        var orig = ta.value;
+        ta.addEventListener('input', function () { save.classList.toggle('hidden', ta.value.trim() === orig.trim()); });
+        save.addEventListener('click', function () {
+          send(card, { reply: ta.value }, msg).then(function (ok) { if (ok) { orig = ta.value; save.classList.add('hidden'); } });
+        });
+        box.addEventListener('change', function () {
+          var want = box.checked;
+          send(card, { active: want }, msg).then(function (ok) { if (ok) card.classList.toggle('opacity-50', !want); else box.checked = !want; });
+        });
+      });
+    })();
+  </script>
+</Layout>

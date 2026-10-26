@@ -1,7 +1,8 @@
 ---
 import Layout from '../../components/Layout.astro';
 import { supabase } from '../../lib/supabase';
-import { loadRun, summarize, typeLabel, TYPE_LABELS, RUN_LABELS } from '../../lib/backtest';
+import BacktestRunBar from '../../components/BacktestRunBar.astro';
+import { loadRun, summarize, typeLabel, TYPE_LABELS, runLabel, isAutoRun, loadAutoRun, summarizeAuto, AUTONOMY, ACTION_LABELS } from '../../lib/backtest';
 
 // Зведення бектесту: частка «так би і я» по кожному типу ситуації (від розмічених).
 const { runs, run, items, error } = await loadRun(supabase, Astro.url.searchParams.get('run'));
@@ -12,6 +13,13 @@ const archive = items.some((i) => i.kind === 'archive') ? sum(items.filter((i) =
 const synthetic = items.some((i) => i.kind === 'synthetic') ? sum(items.filter((i) => i.kind === 'synthetic')) : null;
 const pct = (n: number, d: number) => (d ? `${Math.round((100 * n) / d)}%` : '—');
 const notIt = items.filter((i) => i.decision && i.decision.verdict !== 'same');
+// bt3 і далі — автоматичне порівняння (правка Марка 26.10): частка збігів і «веде сам» / «питає Марка».
+const auto = isAutoRun(run) ? await loadAutoRun(supabase, run!) : null;
+const autoRows = auto ? summarizeAuto(auto.items) : [];
+const autoEval = auto ? auto.items.filter((i) => i.ev) : [];
+const autoMatch = autoEval.filter((i) => i.ev!.match).length;
+const mismatches = auto ? auto.items.filter((i) => i.ev && !i.ev.match) : [];
+const STATUS = { self: ['Handles it alone', 'text-success border-success/40'], ask: ['Asks Marko', 'text-amber-300 border-amber-400/40'], human: ['Always Marko', 'text-danger border-danger/40'] } as const;
 const cell = 'py-2.5 pr-4 text-right tabular-nums';
 const head = 'py-2 pr-4 text-right font-medium';
 ---
@@ -20,21 +28,73 @@ const head = 'py-2 pr-4 text-right font-medium';
   <div class="mb-6 flex flex-wrap items-end justify-between gap-4">
     <div>
       <h1 class="text-2xl font-bold">Backtest summary</h1>
-      <p class="text-gray-500 text-sm mt-1">Share of “same as I would” among the situations you have marked, by situation type.</p>
+      <p class="text-gray-500 text-sm mt-1">{auto
+        ? `Share of drafts that match Marko’s real reply, by situation type. A type is handled by the agent alone at ≥${AUTONOMY.minShare * 100}% on ${AUTONOMY.minCount}+ situations.`
+        : 'Share of “same as I would” among the situations you have marked, by situation type.'}</p>
     </div>
     <div class="flex items-center gap-4">
       {runs.length > 1 && (
         <nav class="flex gap-1 text-xs">
-          {runs.map((r) => <a href={`/backtest/summary?run=${r}`} class={`px-2.5 py-1.5 rounded-md border ${r === run ? 'border-accent text-gray-100' : 'border-border text-gray-500 hover:text-gray-300'}`}>{RUN_LABELS[r] ?? r}</a>)}
+          {runs.map((r) => <a href={`/backtest/summary?run=${r}`} class={`px-2.5 py-1.5 rounded-md border ${r === run ? 'border-accent text-gray-100' : 'border-border text-gray-500 hover:text-gray-300'}`}>{runLabel(r)}</a>)}
         </nav>
       )}
       <a href={`/backtest?run=${run ?? ''}`} class="text-sm text-accent hover:underline">← Back to marking</a>
     </div>
   </div>
 
+  {auto && <div class="mb-5"><BacktestRunBar /></div>}
   {error && <div class="mb-4 bg-danger/10 border border-danger/30 text-danger text-sm rounded-lg px-4 py-3 max-w-2xl">Could not load the summary. Try again in a minute.</div>}
 
-  {!total ? (
+  {auto ? (
+    <div class="max-w-5xl space-y-8">
+      <div class="grid gap-4 sm:grid-cols-3">
+        <div class="bg-card border border-border rounded-xl p-5"><p class="text-xs uppercase tracking-wide text-gray-500">Match with Marko</p><p class="text-3xl font-bold mt-1">{pct(autoMatch, autoEval.length)}</p><p class="text-xs text-gray-500 mt-1">{autoMatch} of {autoEval.length} compared pairs</p></div>
+        <div class="bg-card border border-border rounded-xl p-5"><p class="text-xs uppercase tracking-wide text-gray-500">Types the agent handles alone</p><p class="text-3xl font-bold mt-1">{autoRows.filter((r) => r.status === 'self').length}</p><p class="text-xs text-gray-500 mt-1">of {autoRows.length} types</p></div>
+        <div class="bg-card border border-border rounded-xl p-5"><p class="text-xs uppercase tracking-wide text-gray-500">Filtered out</p><p class="text-3xl font-bold mt-1">{auto.filteredPairs.length}</p><p class="text-xs text-gray-500 mt-1"><a class="text-accent hover:underline" href={`/backtest?run=${run}#filtered`}>reply was about something else</a></p></div>
+      </div>
+
+      <div class="bg-card border border-border rounded-xl p-5 overflow-x-auto">
+        <table class="w-full text-sm">
+          <thead>
+            <tr class="text-xs uppercase text-gray-500 border-b border-border">
+              <th class="py-2 pr-4 text-left font-medium">Situation type</th>
+              <th class={head}>Compared</th><th class={head}>Match</th><th class={head}>Match, %</th>
+              <th class="py-2 pr-4 text-left font-medium">Agent</th>
+            </tr>
+          </thead>
+          <tbody>
+            {autoRows.map((r) => (
+              <tr class="border-b border-border/60 last:border-0">
+                <td class="py-2.5 pr-4"><a class="hover:underline" href={`/backtest?run=${run}&show=all&type=${r.type}`}>{typeLabel(r.type)}</a></td>
+                <td class={cell}>{r.evaluated}{r.evaluated !== r.total ? `/${r.total}` : ''}</td>
+                <td class={cell}>{r.match}</td>
+                <td class={`${cell} font-semibold`}>{r.share === null ? '—' : `${Math.round(r.share * 100)}%`}</td>
+                <td class="py-2.5 pr-4"><span class={`px-2 py-0.5 rounded-md border text-xs ${STATUS[r.status][1]}`}>{STATUS[r.status][0]}</span> <span class="text-xs text-gray-500 ml-1">{r.why}</span></td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        <p class="text-xs text-gray-600 mt-4">Match = same action as Marko, no invented fact, tone like Marko’s, length within 0.4–2.5× (or within 40 characters). An invented fact is always a mismatch.</p>
+      </div>
+
+      {mismatches.length > 0 && (
+        <div>
+          <h2 class="text-lg font-semibold mb-3">Mismatches and why ({mismatches.length})</h2>
+          <div class="space-y-3">
+            {mismatches.map((i) => (
+              <div class="bg-card border border-border rounded-xl p-4 text-sm">
+                <p class="text-xs text-gray-500 mb-2">{typeLabel(i.type)} · {i.title} · {i.ts} · Marko {ACTION_LABELS[i.ev!.markoAction ?? ''] ?? '—'}, agent {ACTION_LABELS[i.ev!.agentAction ?? ''] ?? '—'}</p>
+                <p class="text-gray-400 mb-1.5 whitespace-pre-wrap break-words"><span class="text-gray-600">Partner: </span>{i.partner}</p>
+                <p class="text-gray-300 mb-1.5 whitespace-pre-wrap break-words"><span class="text-gray-600">Agent: </span>{i.draft ? (i.draft.route === 'draft' ? i.draft.messages.join(' / ') : '(handed to Marko)') : '—'}</p>
+                <p class="text-gray-100 whitespace-pre-wrap break-words"><span class="text-gray-600">Marko: </span>{i.realReply}</p>
+                {i.ev!.reason && <p class="text-xs text-amber-300 mt-2">{i.ev!.reason}</p>}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  ) : !total ? (
     <div class="bg-card rounded-xl border border-border p-16 text-center max-w-3xl"><p class="text-gray-400">No backtest loaded yet.</p></div>
   ) : (
     <div class="max-w-5xl space-y-8">

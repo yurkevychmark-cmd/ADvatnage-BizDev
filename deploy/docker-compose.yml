@@ -51,6 +51,10 @@ services:
       BIZDEV_REST_URL: http://bizdev-rest:3000
       BIZDEV_FILES_DIR: /data/files
       BIZDEV_LISTENER_URL: http://bizdev-listener:8080
+      # Ключ моделей для бектесту й агента (таск cfb5898d) — лише в /opt/bizdev/.env на сервері.
+      BIZDEV_OPENROUTER_API_KEY: ${BIZDEV_OPENROUTER_API_KEY:-}
+      BIZDEV_DRAFTER_MODEL: ${BIZDEV_DRAFTER_MODEL:-}
+      BIZDEV_JUDGE_MODEL: ${BIZDEV_JUDGE_MODEL:-}
     volumes:
       - bizdev_files:/data/files
     depends_on: [bizdev-rest]

@@ -11,8 +11,8 @@ const [, , selFile, synFile, outDir, sizeArg] = process.argv;
 if (!selFile || !synFile || !outDir) { console.error('usage: build-batches.mjs <selection.json> <synthetic.json> <out-dir> [size]'); process.exit(2); }
 const SIZE = Number(sizeArg ?? 10);
 const here = path.dirname(fileURLToPath(import.meta.url));
-const passport = fs.readFileSync(path.join(here, 'profile/passport.md'), 'utf8');
-const style = fs.readFileSync(process.env.STYLE_PROFILE ?? path.join(here, 'profile/style-profile.md'), 'utf8');
+const passport = fs.readFileSync(path.join(here, '../src/lib/agent/passport.md'), 'utf8');
+const style = fs.readFileSync(process.env.STYLE_PROFILE ?? path.join(here, '../src/lib/agent/style-profile.md'), 'utf8');
 
 const archive = JSON.parse(fs.readFileSync(selFile, 'utf8')).map((r, i) => ({
   id: `a${String(i + 1).padStart(2, '0')}`, kind: 'archive', type: r.type,
