@@ -108,6 +108,16 @@ if (cmd === 'drafts') {
       partner_author: p.partner_author, partner_role: p.partner_role, pair_id: p.id, example_ids: pr.picked.map((e) => e.id) });
     items.push({ id: sid, system: pr.system, user: pr.user, prompt: `${pr.system}\n${pr.user}`, reply: p.real_reply });
   });
+  writeBatches('drafter', items, null);
+  // повторна перевірка записаних файлів, до запису в базу: відповідь Марка не трапляється ні у своїй підказці (system), ні в інших підказках пачки
+  const replyOf = new Map(items.map((x) => [x.id, x.reply]));
+  for (const f of fs.readdirSync(path.join(dir, 'drafter'))) {
+    const batch = readJson(path.join(dir, 'drafter', f)).items;
+    for (const x of batch) for (const y of batch) {
+      const leak = A.findLeak(x === y ? x.system : `${x.system}\n${x.user}`, replyOf.get(y.id));
+      if (leak) throw new Error(`${f}: у підказці ${x.id} відповідь ${y.id} («${leak}»)`);
+    }
+  }
   psql(`begin;
     insert into backtest_runs (id, drafter_model, judge_model, started_by, total) values ('${runId}', '${DRAFTER}', '${JUDGE}', 'chat: Dev - BLACK ORACLE #1', ${relevant.length});
     insert into backtest_situations (id, run_id, kind, situation_type, source_chat, source_title, source_ts, card, context, partner_message, real_reply, sort_order, partner_author, partner_role, pair_id, example_ids)
@@ -116,16 +126,6 @@ if (cmd === 'drafts') {
     from jsonb_array_elements(${lit(situations)}) x;
     commit;`);
   writeJson(statePath, { runId });
-  writeBatches('drafter', items, null);
-  // повторна перевірка вже записаних файлів: жодна відповідь Марка з пачки не трапляється в жодній підказці пачки
-  const replyOf = new Map(items.map((x) => [x.id, x.reply]));
-  for (const f of fs.readdirSync(path.join(dir, 'drafter'))) {
-    const batch = readJson(path.join(dir, 'drafter', f)).items;
-    for (const x of batch) for (const y of batch) {
-      const leak = A.findLeak(`${x.system}\n${x.user}`, replyOf.get(y.id));
-      if (leak) throw new Error(`${f}: у підказці ${x.id} відповідь ${y.id} («${leak}»)`);
-    }
-  }
   console.log(`прогін ${runId}: ${relevant.length} ситуацій`);
 }
 
