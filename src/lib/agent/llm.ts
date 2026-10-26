@@ -13,6 +13,12 @@ export const JUDGE_MODEL = () => env('BIZDEV_JUDGE_MODEL') || 'claude-opus-5-5';
 
 export const llmConfigured = () => !!env('BIZDEV_ANTHROPIC_API_KEY');
 
+/**
+ * Прогін через API вмикається лише перемикачем BIZDEV_BACKTEST_API=1 (рішення Марка 26.10): поки агента
+ * налаштовуємо, прогони йдуть на підписці з робочого чату (backtest/run-local.mjs), а API — для роботи наживо.
+ */
+export const apiRunsEnabled = () => env('BIZDEV_BACKTEST_API') === '1' && llmConfigured();
+
 export type Effort = 'low' | 'medium' | 'high';
 
 export interface ChatOpts {

@@ -11,11 +11,10 @@
 import { supabase } from '../supabase';
 import { chat, parseJsonObject, DRAFTER_MODEL, JUDGE_MODEL, usage } from './llm';
 import type { Example } from './examples';
-import { SITUATION_TYPES, RED_TYPES, ACTIONS, TRIAGE_SYSTEM, triageUser, JUDGE_SYSTEM, judgeUser, lengthCheck } from './prompts';
-import { buildDraftPrompt, decideMatch, type Pair } from './core';
+import { TRIAGE_SYSTEM, triageUser, JUDGE_SYSTEM, judgeUser } from './prompts';
+import { buildDraftPrompt, triageResult, normalizeDraft, evalRow, type Pair } from './core';
 
 const db = supabase as any;
-const TYPES = new Set(SITUATION_TYPES.map((t) => t.slug));
 
 async function pool<T>(items: T[], n: number, fn: (x: T) => Promise<void>) {
   let i = 0;
@@ -34,11 +33,9 @@ export async function triage(pairs: Pair[], judgeModel: string) {
       model: judgeModel, system: TRIAGE_SYSTEM, effort: 'low',
       user: triageUser({ context: p.context, partnerAuthor: p.partner_author, partnerRole: p.partner_role, partner: p.partner_message, reply: p.real_reply }),
     }));
-    const relevant = out.relevant === true;
-    const type = TYPES.has(out.type) ? out.type : 'other';
-    const reason = relevant ? null : String(out.reason ?? 'відповідь не про це повідомлення').slice(0, 400);
-    await must(db.from('backtest_pairs').update({ relevant, filter_reason: reason, situation_type: type, triage_model: judgeModel }).eq('id', p.id));
-    Object.assign(p, { relevant, filter_reason: reason, situation_type: type });
+    const r = triageResult(out);
+    await must(db.from('backtest_pairs').update({ ...r, triage_model: judgeModel }).eq('id', p.id));
+    Object.assign(p, r);
   });
 }
 
@@ -94,37 +91,17 @@ export async function runBacktest(runId: string) {
     if (prompt.leak) throw new Error(`«списування» в ${p.id}: «${prompt.leak}»`); // не мало статися: приклади й профіль уже почищено
 
     const d = parseJsonObject(await chat({ model: drafter, system: prompt.system, user: prompt.user, effort: 'medium' }));
-    const route = d.route === 'human' ? 'human' : 'draft';
-    const messages = route === 'draft' && Array.isArray(d.messages) ? d.messages.map(String).map((s: string) => s.trim()).filter(Boolean).slice(0, 3) : [];
-    const draft = { route: route === 'draft' && !messages.length ? 'human' : route, messages };
+    const draft = normalizeDraft(d);
     await must(db.from('backtest_drafts').upsert({
-      situation_id: sid, route: draft.route, messages: draft.messages, why: d.why ? String(d.why) : null,
-      card_gap: d.card_gap ? String(d.card_gap) : null, model: drafter, created_at: new Date().toISOString(),
+      situation_id: sid, route: draft.route, messages: draft.messages, why: draft.why,
+      card_gap: draft.card_gap, model: drafter, created_at: new Date().toISOString(),
     }, { onConflict: 'situation_id' }));
 
     const j = parseJsonObject(await chat({
       model: judge, system: JUDGE_SYSTEM, effort: 'high',
       user: judgeUser({ context: p.context, partnerAuthor: p.partner_author, partnerRole: p.partner_role, partner: p.partner_message, reply: p.real_reply, draft }),
     }));
-    const act = (v: unknown) => (ACTIONS as readonly string[]).includes(String(v)) ? String(v) : null;
-    const verdict = { same_action: j.same_action === true, invented_fact: j.invented_fact === true, tone_ok: j.tone_ok !== false };
-    if (draft.route === 'human') { verdict.invented_fact = false; verdict.tone_ok = true; }
-    const len = draft.route === 'human' ? { ratio: null, ok: true } : lengthCheck(draft.messages.join('\n').length, p.real_reply.length);
-    const match = decideMatch(type, draft, verdict, len.ok);
-    const reasons: string[] = [];
-    if (!match) {
-      if (RED_TYPES.has(type) && draft.route !== 'human') reasons.push('Тема для Марка (гроші, бани чи «ти бот?»), а агент відповів сам.');
-      else if (!RED_TYPES.has(type) && draft.route === 'human') reasons.push('Агент передав Марку, а Марко відповів як у звичайній ситуації.');
-      if (j.reason) reasons.push(String(j.reason));
-      if (verdict.invented_fact && j.invented_what) reasons.push(`Вигадано: ${j.invented_what}.`);
-      if (!len.ok && len.ratio !== null) reasons.push(`Довжина ${len.ratio > 1 ? 'в' : 'лише'} ${len.ratio.toFixed(1)}× від відповіді Марка.`);
-    }
-    await must(db.from('backtest_evals').upsert({
-      situation_id: sid, marko_action: act(j.marko_action), agent_action: draft.route === 'human' ? 'handed_off' : act(j.agent_action),
-      same_action: verdict.same_action, invented_fact: verdict.invented_fact, invented_what: verdict.invented_fact ? (j.invented_what ?? null) : null,
-      tone_ok: verdict.tone_ok, length_ratio: len.ratio, length_ok: len.ok, match, reason: reasons.join(' ') || null,
-      judge_model: judge, created_at: new Date().toISOString(),
-    }, { onConflict: 'situation_id' }));
+    await must(db.from('backtest_evals').upsert(evalRow(sid, type, draft, j, p.real_reply, judge), { onConflict: 'situation_id' }));
   }
 }
 

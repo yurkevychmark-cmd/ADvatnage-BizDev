@@ -53,6 +53,8 @@ services:
       BIZDEV_LISTENER_URL: http://bizdev-listener:8080
       # Ключ моделей для бектесту й агента (таск cfb5898d) — лише в /opt/bizdev/.env на сервері.
       BIZDEV_ANTHROPIC_API_KEY: ${BIZDEV_ANTHROPIC_API_KEY:-}
+      # 1 — прогін бектесту кнопкою через API; без нього прогони йдуть на підписці з робочого чату.
+      BIZDEV_BACKTEST_API: ${BIZDEV_BACKTEST_API:-}
       BIZDEV_DRAFTER_MODEL: ${BIZDEV_DRAFTER_MODEL:-}
       BIZDEV_JUDGE_MODEL: ${BIZDEV_JUDGE_MODEL:-}
     volumes:

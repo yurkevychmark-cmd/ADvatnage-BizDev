@@ -2,10 +2,12 @@
 // Кнопка «Run backtest» і стан останнього прогону автоматичного порівняння (таск cfb5898d).
 import { supabase } from '../lib/supabase';
 import { runLabel } from '../lib/backtest';
+import { apiRunsEnabled } from '../lib/agent/llm';
 
 const { data: last } = await (supabase as any).from('backtest_runs').select('*').order('started_at', { ascending: false }).limit(1);
 const r = last?.[0] ?? null;
 const running = r?.status === 'running';
+const viaApi = apiRunsEnabled();
 ---
 
 <div class="flex flex-wrap items-center gap-3 text-xs" id="bt-runbar">
@@ -17,9 +19,10 @@ const running = r?.status === 'running';
       <span class="text-gray-600"> · drafts {r.drafter_model}, judged by {r.judge_model}</span>
     </span>
   )}
-  <button id="bt-run" disabled={running} class="px-3 py-1.5 rounded-md border border-accent text-gray-100 hover:bg-accent/10 disabled:opacity-40 disabled:cursor-not-allowed">
+  {!viaApi && <span class="text-gray-500">New runs go from the chat «Dev - BLACK ORACLE #1» (subscription, no API spend).</span>}
+  {viaApi && <button id="bt-run" disabled={running} class="px-3 py-1.5 rounded-md border border-accent text-gray-100 hover:bg-accent/10 disabled:opacity-40 disabled:cursor-not-allowed">
     {running ? 'Running…' : 'Run backtest'}
-  </button>
+  </button>}
   <span id="bt-run-msg" class="text-gray-500"></span>
 </div>
 

@@ -4,23 +4,10 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
-import os from 'node:os';
-import path from 'node:path';
-import { fileURLToPath, pathToFileURL } from 'node:url';
-import { build } from 'esbuild';
+import { loadAgent } from '../lib/agent-bundle.mjs';
 
-const here = path.dirname(fileURLToPath(import.meta.url));
-const out = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'agent-test-')), 'core.mjs');
-await build({
-  entryPoints: [path.join(here, '../../src/lib/agent/core.ts')], bundle: true, format: 'esm', platform: 'node', outfile: out,
-  plugins: [{ name: 'raw', setup(b) {
-    b.onResolve({ filter: /\?raw$/ }, (a) => ({ path: path.resolve(a.resolveDir, a.path.replace(/\?raw$/, '')), namespace: 'raw' }));
-    b.onLoad({ filter: /.*/, namespace: 'raw' }, (a) => ({ contents: fs.readFileSync(a.path, 'utf8'), loader: 'text' }));
-  } }],
-  logLevel: 'silent',
-});
-const core = await import(pathToFileURL(out).href);
-const { buildDraftPrompt, decideMatch } = core;
+const core = await loadAgent();
+const { buildDraftPrompt, decideMatch, packBatches, evalRow, normalizeDraft } = core;
 
 const ex = (id, chat, ts, partner, reply, type = 'integration') => ({
   id, pair_id: id, chat, ts, situation_type: type, partner_author: 'Luke', partner_role: 'оператор', partner_message: partner, reply, active: true,
@@ -92,6 +79,29 @@ test('збіг: вигаданий факт — завжди «не збіг»; 
   assert.equal(decideMatch('money', { route: 'draft' }, ok, true), false);
 });
 
+test('пачки для субагента: відповідь однієї ситуації не трапляється в підказці іншої з тієї ж пачки', () => {
+  const items = [
+    { sid: 'a', prompt: 'Приклад: Sure, please send the email for the Voluum invite', reply: 'Ok thanks' },
+    { sid: 'b', prompt: 'Розмова про трекер', reply: 'Sure, please send the email for the Voluum invite' },
+    { sid: 'c', prompt: 'Інша розмова', reply: 'We will launch tomorrow morning' },
+  ];
+  const batches = packBatches(items, 8);
+  const where = (sid) => batches.findIndex((b) => b.some((x) => x.sid === sid));
+  assert.notEqual(where('a'), where('b'));
+  assert.ok(batches.every((b) => b.length <= 8));
+  assert.equal(batches.flat().length, 3);
+});
+
+test('оцінка: вигаданий факт не дає збігу навіть коли модель-оцінювач каже «та сама дія»', () => {
+  const d = normalizeDraft({ route: 'draft', messages: ['Will send it tomorrow'] });
+  const ok = { same_action: true, invented_fact: false, tone_ok: true };
+  assert.equal(evalRow('s', 'integration', d, ok, 'Will send it tomorrow', 'j').match, true);
+  const r = evalRow('s', 'integration', d, { ...ok, invented_fact: true, invented_what: 'строк' }, 'Will send it tomorrow', 'j');
+  assert.equal(r.match, false);
+  assert.match(r.reason, /Вигадано/);
+  assert.equal(normalizeDraft({ route: 'draft', messages: [] }).route, 'human');
+});
+
 // На справжніх парах: для кожної — жодного фрагмента її відповіді в профілі, паспорті й прикладах.
 const pairsFile = process.env.BT_PAIRS;
 test('справжні пари: у підказці агента немає жодної оцінюваної відповіді', { skip: !pairsFile && 'BT_PAIRS не задано' }, () => {
@@ -105,5 +115,8 @@ test('справжні пари: у підказці агента немає ж�
     assert.ok(r.picked.length >= 3, `${p.id}: ${r.picked.length} прикладів`);
     removed += r.profileLinesRemoved;
   }
-  console.log(`пар ${pairs.length}; рядків профілю прибрано разом ${removed}`);
+  const items = pairs.map((p) => { const r = buildDraftPrompt(p, pool); return { sid: p.id, prompt: `${r.system}\n${r.user}`, reply: p.real_reply }; });
+  const batches = packBatches(items, 8);
+  for (const b of batches) for (const x of b) for (const y of b) if (x !== y) assert.equal(core.findLeak(x.prompt, y.reply), null, `${x.sid} видає ${y.sid}`);
+  console.log(`пар ${pairs.length}; рядків профілю прибрано разом ${removed}; пачок по 8: ${batches.length}`);
 });
