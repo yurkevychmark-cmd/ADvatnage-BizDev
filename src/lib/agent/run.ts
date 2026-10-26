@@ -9,7 +9,7 @@
  * Нічого нікуди не надсилається.
  */
 import { supabase } from '../supabase';
-import { chat, parseJsonObject, DRAFTER_MODEL, JUDGE_MODEL } from './llm';
+import { chat, parseJsonObject, DRAFTER_MODEL, JUDGE_MODEL, usage } from './llm';
 import type { Example } from './examples';
 import { SITUATION_TYPES, RED_TYPES, ACTIONS, TRIAGE_SYSTEM, triageUser, JUDGE_SYSTEM, judgeUser, lengthCheck } from './prompts';
 import { buildDraftPrompt, decideMatch, type Pair } from './core';
@@ -31,7 +31,7 @@ async function must<T>(q: PromiseLike<{ data: T; error: any }>): Promise<T> {
 export async function triage(pairs: Pair[], judgeModel: string) {
   await pool(pairs.filter((p) => p.relevant === null), 4, async (p) => {
     const out = parseJsonObject(await chat({
-      model: judgeModel, system: TRIAGE_SYSTEM, temperature: 0, maxTokens: 300,
+      model: judgeModel, system: TRIAGE_SYSTEM, effort: 'low',
       user: triageUser({ context: p.context, partnerAuthor: p.partner_author, partnerRole: p.partner_role, partner: p.partner_message, reply: p.real_reply }),
     }));
     const relevant = out.relevant === true;
@@ -93,7 +93,7 @@ export async function runBacktest(runId: string) {
     }, { onConflict: 'id' }));
     if (prompt.leak) throw new Error(`«списування» в ${p.id}: «${prompt.leak}»`); // не мало статися: приклади й профіль уже почищено
 
-    const d = parseJsonObject(await chat({ model: drafter, system: prompt.system, user: prompt.user, temperature: 0.3, maxTokens: 700 }));
+    const d = parseJsonObject(await chat({ model: drafter, system: prompt.system, user: prompt.user, effort: 'medium' }));
     const route = d.route === 'human' ? 'human' : 'draft';
     const messages = route === 'draft' && Array.isArray(d.messages) ? d.messages.map(String).map((s: string) => s.trim()).filter(Boolean).slice(0, 3) : [];
     const draft = { route: route === 'draft' && !messages.length ? 'human' : route, messages };
@@ -103,7 +103,7 @@ export async function runBacktest(runId: string) {
     }, { onConflict: 'situation_id' }));
 
     const j = parseJsonObject(await chat({
-      model: judge, system: JUDGE_SYSTEM, temperature: 0, maxTokens: 500,
+      model: judge, system: JUDGE_SYSTEM, effort: 'high',
       user: judgeUser({ context: p.context, partnerAuthor: p.partner_author, partnerRole: p.partner_role, partner: p.partner_message, reply: p.real_reply, draft }),
     }));
     const act = (v: unknown) => (ACTIONS as readonly string[]).includes(String(v)) ? String(v) : null;
@@ -142,7 +142,10 @@ export async function startRun(startedBy: string | null) {
   if (drafter === judge) return { error: 'Drafter and judge must be different models' };
   const { error } = await db.from('backtest_runs').insert({ id, drafter_model: drafter, judge_model: judge, started_by: startedBy });
   if (error) return { error: error.message };
+  const before = { ...usage };
+  const tokens = () => `${usage.calls - before.calls} calls, in ${usage.input - before.input}, out ${usage.output - before.output}`;
   runBacktest(id)
+    .finally(() => console.log('[backtest] run', id, 'tokens:', tokens()))
     .then(() => db.from('backtest_runs').update({ status: 'done', finished_at: new Date().toISOString() }).eq('id', id))
     .catch((e: unknown) => {
       const msg = e instanceof Error ? e.message : String(e);
