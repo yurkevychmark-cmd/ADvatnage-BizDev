@@ -1,0 +1,134 @@
+---
+/**
+ * Telegram-чати картки баєра чи оператора (таск 1dcedada, критерій 1). Прив'язаний чат слухач
+ * починає читати за кілька секунд; відв'язаний — перестає. Список у env для цього не потрібен.
+ */
+interface Props { type: 'buyer' | 'operator'; id: string }
+const { type, id } = Astro.props;
+---
+
+<section id="tg-links" data-type={type} data-id={id} class="bg-card rounded-xl border border-border p-6 max-w-2xl mt-6">
+  <div class="flex items-center justify-between mb-1">
+    <h2 class="font-semibold text-base">Telegram-чати</h2>
+    <button type="button" id="tg-link-open" class="text-sm bg-accent/15 hover:bg-accent text-accent hover:text-white border border-accent/30 px-3 py-1.5 rounded-lg transition-colors">
+      + Прив'язати чат
+    </button>
+  </div>
+  <p class="text-xs text-gray-600 mb-4">Агент читає лише прив'язані чати робочого акаунта. Нічого не надсилає.</p>
+
+  <div id="tg-link-picker" class="hidden mb-4 border border-border rounded-lg p-3 bg-card-2">
+    <input type="text" id="tg-link-search" placeholder="Пошук чату за назвою…" autocomplete="off"
+      class="w-full bg-card border border-border rounded-lg px-3 py-2 text-sm text-gray-200 placeholder-gray-600 focus:border-accent outline-none" />
+    <div id="tg-link-dialogs" class="mt-2 max-h-64 overflow-y-auto text-sm"></div>
+  </div>
+
+  <div id="tg-link-msg" class="hidden text-xs mb-3"></div>
+  <ul id="tg-link-list" class="space-y-2 text-sm"><li class="text-gray-600">Завантаження…</li></ul>
+</section>
+
+<script>
+  type Link = { id: string; chat_id: string; chat_title: string | null; chat_kind: string | null; linked_by: string | null; linked_at: string; messages: number; last_at: string | null };
+  type Dialog = { id: string; kind: string; title: string | null };
+
+  const root = document.getElementById('tg-links')!;
+  const type = root.dataset.type!;
+  const id = root.dataset.id!;
+  const list = document.getElementById('tg-link-list')!;
+  const picker = document.getElementById('tg-link-picker')!;
+  const search = document.getElementById('tg-link-search') as HTMLInputElement;
+  const dialogsBox = document.getElementById('tg-link-dialogs')!;
+  const msg = document.getElementById('tg-link-msg')!;
+  const kindLabel: Record<string, string> = { user: 'особистий', group: 'група', channel: 'канал / супергрупа' };
+  let links: Link[] = [];
+  let dialogs: Dialog[] = [];
+
+  const esc = (s: unknown) => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  const when = (s: string | null) => (s ? new Date(s).toLocaleString('uk-UA', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) : '—');
+
+  function say(text: string, bad = false) {
+    msg.textContent = text;
+    msg.className = `text-xs mb-3 ${bad ? 'text-danger' : 'text-success'}`;
+  }
+
+  function renderLinks() {
+    if (!links.length) {
+      list.innerHTML = '<li class="text-gray-600">Чатів не прив\'язано — агент по цій картці нічого не читає.</li>';
+      return;
+    }
+    list.innerHTML = links.map((l) => `
+      <li class="tg-link flex items-center gap-3 bg-card-2 border border-border rounded-lg px-3 py-2" data-chat="${esc(l.chat_id)}">
+        <div class="flex-1 min-w-0">
+          <div class="text-gray-200 truncate">${esc(l.chat_title ?? l.chat_id)}</div>
+          <div class="text-[11px] text-gray-600">${esc(kindLabel[l.chat_kind ?? ''] ?? l.chat_kind ?? '')} · id ${esc(l.chat_id)} · повідомлень у базі: <span class="tg-count">${l.messages}</span> · останнє ${when(l.last_at)}</div>
+        </div>
+        <button type="button" class="tg-unlink text-xs text-danger hover:bg-danger/10 border border-danger/20 rounded-lg px-2.5 py-1" data-link="${esc(l.id)}">Відв'язати</button>
+      </li>`).join('');
+  }
+
+  function renderDialogs() {
+    const q = search.value.trim().toLowerCase();
+    const linked = new Set(links.map((l) => l.chat_id));
+    const rows = dialogs.filter((d) => !linked.has(String(d.id)) && (!q || (d.title ?? '').toLowerCase().includes(q) || String(d.id).includes(q))).slice(0, 50);
+    dialogsBox.innerHTML = rows.length
+      ? rows.map((d) => `
+        <div class="flex items-center gap-3 px-2 py-1.5 border-b border-border/40 last:border-0">
+          <div class="flex-1 min-w-0"><span class="text-gray-200">${esc(d.title ?? '(без назви)')}</span>
+            <span class="text-[11px] text-gray-600 ml-1">${esc(kindLabel[d.kind] ?? d.kind)} · ${esc(d.id)}</span></div>
+          <button type="button" class="tg-link-add text-xs text-accent hover:underline" data-chat="${esc(d.id)}">Прив'язати</button>
+        </div>`).join('')
+      : '<div class="px-2 py-1.5 text-gray-600 text-xs">Нічого не знайдено</div>';
+  }
+
+  async function load() {
+    const res = await fetch(`/api/tg-links?type=${type}&id=${id}`);
+    const data = await res.json();
+    if (!res.ok) { list.innerHTML = `<li class="text-danger">${esc(data.error ?? 'Помилка')}</li>`; return; }
+    links = data.links;
+    renderLinks();
+  }
+
+  async function post(body: Record<string, unknown>) {
+    const res = await fetch('/api/tg-links', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ type, id, ...body }) });
+    const data = await res.json();
+    if (!res.ok) { say(data.error ?? 'Не вдалося зберегти', true); return false; }
+    links = data.links;
+    renderLinks();
+    return data;
+  }
+
+  document.getElementById('tg-link-open')!.addEventListener('click', async () => {
+    picker.classList.toggle('hidden');
+    if (picker.classList.contains('hidden')) return;
+    dialogsBox.innerHTML = '<div class="px-2 py-1.5 text-gray-600 text-xs">Завантажую чати робочого акаунта…</div>';
+    const res = await fetch('/api/tg-links?dialogs=1');
+    const data = await res.json();
+    if (!res.ok) { dialogsBox.innerHTML = `<div class="px-2 py-1.5 text-danger text-xs">${esc(data.error ?? 'Слухач недоступний')}</div>`; return; }
+    dialogs = data.dialogs;
+    renderDialogs();
+    search.focus();
+  });
+  search.addEventListener('input', renderDialogs);
+
+  dialogsBox.addEventListener('click', async (e) => {
+    const btn = (e.target as HTMLElement).closest<HTMLButtonElement>('.tg-link-add');
+    if (!btn) return;
+    btn.disabled = true;
+    btn.textContent = '…';
+    const data = await post({ action: 'link', chat_id: btn.dataset.chat });
+    if (data) {
+      say(data.listenerReloaded ? 'Прив\'язано. Слухач уже читає цей чат.' : 'Прив\'язано. Слухач підхопить чат протягом хвилини.');
+      renderDialogs();
+    } else {
+      btn.disabled = false;
+      btn.textContent = 'Прив\'язати';
+    }
+  });
+
+  list.addEventListener('click', async (e) => {
+    const btn = (e.target as HTMLElement).closest<HTMLButtonElement>('.tg-unlink');
+    if (!btn || !confirm('Відв\'язати чат? Слухач перестане його читати; вже записані повідомлення лишаються.')) return;
+    if (await post({ action: 'unlink', link_id: btn.dataset.link })) say('Відв\'язано.');
+  });
+
+  load();
+</script>

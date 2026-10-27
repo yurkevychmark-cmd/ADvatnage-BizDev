@@ -13,11 +13,13 @@ export interface ListenerStatus {
   /** SVG з QR для входу — лише поки step === 'need_qr'. */
   qr: string | null;
   lastMessageAt: string | null;
-  allowed: { id: string; title: string | null; kind?: string; messages: number; last_at?: string | null }[];
+  allowed: { id: string; title: string | null; kind?: string; messages: number; last_at?: string | null; source?: 'card' | 'env' | 'card+env' }[];
   pult: { configured: boolean; botUsername?: string; bound?: boolean; bindCode?: string | null };
 }
 
-export async function listener(path: string, body?: Record<string, unknown>): Promise<ListenerStatus> {
+export interface Dialog { id: string; kind: 'user' | 'group' | 'channel'; title: string | null }
+
+export async function listener<T = ListenerStatus>(path: string, body?: Record<string, unknown>): Promise<T> {
   if (!url) throw new Error('BIZDEV_LISTENER_URL is not set');
   const res = await fetch(`${url}${path}`, {
     method: body ? 'POST' : 'GET',

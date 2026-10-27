@@ -70,3 +70,9 @@ export async function chatStats(ids) {
 export async function dbOk() {
   await pool.query('select 1');
 }
+
+/** Чати, прив'язані до карток у порталі (роль бачить лише цю колонку tg_chat_links). */
+export async function linkedChatIds() {
+  const { rows } = await pool.query(`select distinct chat_id::text as id from tg_chat_links`);
+  return rows.map((r) => r.id);
+}

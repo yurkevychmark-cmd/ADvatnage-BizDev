@@ -1,5 +1,6 @@
 ---
 import Layout from '../../components/Layout.astro';
+import TgChatLinks from '../../components/TgChatLinks.astro';
 import { supabase } from '../../lib/supabase';
 
 const { id } = Astro.params;
@@ -166,6 +167,8 @@ const inputCls = "w-full bg-card-2 border border-border rounded-lg px-4 py-2 tex
       </button>
     </div>
   </form>
+
+  <TgChatLinks type="buyer" id={id!} />
 </Layout>
 
 <script>

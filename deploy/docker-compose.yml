@@ -3,7 +3,8 @@
 #   POSTGRES_PASSWORD    — власник бази bizdev
 #   BIZDEV_API_PASSWORD  — логін PostgREST (роль bizdev_authenticator)
 #   BIZDEV_LISTENER_PASSWORD — логін слухача Telegram (роль bizdev_listener)
-# Несекретне там же: BIZDEV_TG_ALLOWED_CHATS — id дозволених чатів через кому.
+# Несекретне там же: BIZDEV_TG_ALLOWED_CHATS — старий список id чатів через кому, необов'язковий:
+#   з таска 1dcedada чати прив'язуються в картках баєра й оператора (tg_chat_links).
 name: bizdev
 
 services:

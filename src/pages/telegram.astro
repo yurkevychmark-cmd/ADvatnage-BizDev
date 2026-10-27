@@ -1,6 +1,7 @@
 ---
 import Layout from '../components/Layout.astro';
 import { listener, type ListenerStatus } from '../lib/listener';
+import { supabase } from '../lib/supabase';
 
 // Підключення робочого Telegram-акаунта (таск 140108c8, BizDev-агент · 2/8).
 // Номер, код і пароль 2FA вводить сам власник акаунта — тут, на сторінці за логіном.
@@ -73,6 +74,14 @@ const fmt = (s?: string | null) => (s ? new Date(s).toLocaleString('uk-UA', { ti
 const input = 'w-full bg-card-2 border border-border rounded-lg px-4 py-2.5 text-sm text-gray-200 placeholder-gray-600 focus:border-accent outline-none';
 const primary = 'bg-accent hover:bg-accent-dark text-white text-sm font-medium rounded-lg px-4 py-2.5 transition-colors';
 const ghost = 'text-sm text-gray-400 hover:text-gray-200 border border-border rounded-lg px-4 py-2.5 transition-colors';
+
+// До яких карток прив'язано чати (таск 1dcedada)
+const { data: chatLinks } = await (supabase as any).from('tg_chat_links').select('chat_id, buyer:buyers(id,name), operator:operators(id,name)');
+const cardsOf = new Map<string, { href: string; name: string }[]>();
+for (const l of chatLinks ?? []) {
+  const card = l.buyer ? { href: `/buyers/${l.buyer.id}`, name: l.buyer.name } : l.operator ? { href: `/operators/${l.operator.id}`, name: l.operator.name } : null;
+  if (card) cardsOf.set(String(l.chat_id), [...(cardsOf.get(String(l.chat_id)) ?? []), card]);
+}
 ---
 
 <Layout title="Telegram">
@@ -215,15 +224,19 @@ const ghost = 'text-sm text-gray-400 hover:text-gray-200 border border-border ro
       <section class="bg-card border border-border rounded-xl p-6">
         <h2 class="text-sm font-semibold text-gray-300 uppercase tracking-wide mb-4">Allowed chats</h2>
         {status.allowed.length === 0 ? (
-          <p class="text-sm text-gray-500">No chats are allowed yet — the agent reads nothing. For now the list is set on the server; later chats are linked from partner cards.</p>
+          <p class="text-sm text-gray-500">No chats are allowed yet — the agent reads nothing. Link a chat from a buyer or operator card (section «Telegram-чати»).</p>
         ) : (
           <div class="overflow-x-auto">
             <table class="w-full text-sm">
-              <thead><tr class="text-left text-xs text-gray-500 uppercase"><th class="py-2 pr-4">Chat</th><th class="py-2 pr-4">Messages</th><th class="py-2">Last</th></tr></thead>
+              <thead><tr class="text-left text-xs text-gray-500 uppercase"><th class="py-2 pr-4">Chat</th><th class="py-2 pr-4">Linked to</th><th class="py-2 pr-4">Messages</th><th class="py-2">Last</th></tr></thead>
               <tbody>
                 {status.allowed.map((c) => (
                   <tr class="border-t border-border">
                     <td class="py-2 pr-4">{c.title ?? <span class="text-gray-500">not seen yet</span>} <span class="text-xs text-gray-600 font-mono">{c.id}</span></td>
+                    <td class="py-2 pr-4">
+                      {(cardsOf.get(c.id) ?? []).map((k) => <a href={k.href} class="text-accent hover:underline mr-2">{k.name}</a>)}
+                      {(c.source === 'env' || c.source === 'card+env') && <span class="text-xs text-gray-600" title="BIZDEV_TG_ALLOWED_CHATS on the server">server list</span>}
+                    </td>
                     <td class="py-2 pr-4">{c.messages}</td>
                     <td class="py-2 text-gray-400">{fmt(c.last_at)}</td>
                   </tr>

@@ -36,7 +36,7 @@ if (Astro.request.method === 'POST') {
     const entityType = (form.get('entity_type') as string) || null;
     const entityId   = (form.get('entity_id')   as string) || null;
     const entityName = await resolveEntityName(entityType, entityId);
-    await supabase.from('tasks').update({
+    const { error } = await supabase.from('tasks').update({
       title:       ((form.get('title') as string) ?? '').trim(),
       entity_type: entityType,
       entity_id:   entityId || null,
@@ -46,6 +46,8 @@ if (Astro.request.method === 'POST') {
       due_date:    (form.get('due_date')    as string) || null,
       priority:    (form.get('priority')    as string) || 'medium',
     }).eq('id', form.get('task_id') as string);
+    // напр., дедлайн таска агента не можна стерти (tasks_agent_fields_check)
+    if (error) return Astro.redirect(`/tasks?err=${encodeURIComponent(error.message)}`);
   }
 
   if (action === 'set_status') {
@@ -96,6 +98,11 @@ const totalDone = (allTasks ?? []).filter((t: any) => t.status === 'done').lengt
     <form method="POST" id="edit-task-form" class="space-y-4">
       <input type="hidden" name="_action" value="update" />
       <input type="hidden" name="task_id" id="edit-task-id" />
+
+      <div id="edit-reason-box" class="hidden bg-accent/5 border border-accent/20 rounded-lg px-3 py-2">
+        <p class="text-[11px] text-accent mb-0.5">🤖 Таск агента · привід</p>
+        <p class="text-sm text-gray-300 whitespace-pre-wrap" id="edit-reason"></p>
+      </div>
 
       <div>
         <label class="block text-xs text-gray-500 mb-1">Title <span class="text-danger">*</span></label>
@@ -271,6 +278,13 @@ const totalDone = (allTasks ?? []).filter((t: any) => t.status === 'done').lengt
   </div>
 )}
 
+<!-- ── Filter: all / agent / manual (таск 1dcedada) ─────────────────────────── -->
+<div class="flex items-center gap-1 mb-4 text-sm" id="task-filter">
+  <button type="button" class="task-filter-btn px-3 py-1 rounded-lg border" data-filter="all">Усі</button>
+  <button type="button" class="task-filter-btn px-3 py-1 rounded-lg border" data-filter="agent">🤖 Агента</button>
+  <button type="button" class="task-filter-btn px-3 py-1 rounded-lg border" data-filter="manual">Ручні</button>
+</div>
+
 <!-- ── Kanban board ──────────────────────────────────────────────────────── -->
 <div class="grid grid-cols-1 md:grid-cols-3 gap-4" id="kanban-board">
 
@@ -363,6 +377,12 @@ const totalDone = (allTasks ?? []).filter((t: any) => t.status === 'done').lengt
         </button>
         <p class="flex-1 text-sm font-medium leading-snug ${task.status === 'done' ? 'line-through text-gray-600' : 'text-gray-100'}">${escHtml(task.title)}</p>
       </div>
+      ${task.source === 'agent' ? `
+        <div class="mt-2 ml-6">
+          <span class="text-[11px] bg-accent/10 border border-accent/30 text-accent px-1.5 py-0.5 rounded-full">🤖 Агент</span>
+          ${task.reason ? `<p class="task-reason text-[11px] text-gray-400 mt-1.5 leading-snug"><span class="text-gray-600">Привід:</span> ${escHtml(task.reason)}</p>` : ''}
+        </div>
+      ` : ''}
       ${task.entity_name ? `
         <div class="mt-2 ml-6">
           <span class="text-[11px] text-gray-600 capitalize">${escHtml(task.entity_type ?? '')}</span>
@@ -404,7 +424,7 @@ const totalDone = (allTasks ?? []).filter((t: any) => t.status === 'done').lengt
       const zone = document.querySelector(`.cards-zone[data-status="${status}"]`);
       if (!zone) return;
       zone.innerHTML = '';
-      const filtered = tasks.filter(t => t.status === status);
+      const filtered = tasks.filter(t => t.status === status && (taskFilter === 'all' || (taskFilter === 'agent') === (t.source === 'agent')));
       filtered.forEach(task => zone.appendChild(makeCard(task)));
       // Update count badge
       const col = zone.closest('.kanban-col');
@@ -412,6 +432,24 @@ const totalDone = (allTasks ?? []).filter((t: any) => t.status === 'done').lengt
       if (badge) badge.textContent = filtered.length;
     });
   }
+
+  // ── Filter ─────────────────────────────────────────────────────────────
+  let taskFilter = 'all';
+  try { taskFilter = localStorage.getItem('tasks-filter') || 'all'; } catch {}
+  function paintFilter() {
+    document.querySelectorAll('.task-filter-btn').forEach(b => {
+      const on = b.dataset.filter === taskFilter;
+      b.className = `task-filter-btn px-3 py-1 rounded-lg border transition-colors ${on ? 'border-accent text-gray-100 bg-accent/10' : 'border-border text-gray-500 hover:text-gray-300'}`;
+    });
+  }
+  document.querySelectorAll('.task-filter-btn').forEach(b => b.addEventListener('click', () => {
+    taskFilter = b.dataset.filter;
+    try { localStorage.setItem('tasks-filter', taskFilter); } catch {}
+    paintFilter();
+    renderBoard();
+    setupDnd();
+  }));
+  paintFilter();
 
   renderBoard();
 
@@ -431,6 +469,7 @@ const totalDone = (allTasks ?? []).filter((t: any) => t.status === 'done').lengt
 
   // ── Drag and drop between columns ─────────────────────────────────────
   let dragTaskId = null;
+  let zonesBound = false;
 
   function setupDnd() {
     document.querySelectorAll('.task-card').forEach(card => {
@@ -446,6 +485,10 @@ const totalDone = (allTasks ?? []).filter((t: any) => t.status === 'done').lengt
       });
     });
 
+    // колонки — одні й ті самі між перемальовками: слухачі на них вішаємо один раз,
+    // інакше після кожної зміни статусу drop спрацьовував би кілька разів
+    if (zonesBound) return;
+    zonesBound = true;
     document.querySelectorAll('.cards-zone').forEach(zone => {
       zone.addEventListener('dragover', e => {
         e.preventDefault();
@@ -480,6 +523,8 @@ const totalDone = (allTasks ?? []).filter((t: any) => t.status === 'done').lengt
     document.getElementById('edit-start-date').value = task.start_date ?? '';
     document.getElementById('edit-due-date').value   = task.due_date ?? '';
     document.getElementById('edit-priority').value   = task.priority ?? 'medium';
+    document.getElementById('edit-reason-box').classList.toggle('hidden', task.source !== 'agent');
+    document.getElementById('edit-reason').textContent = task.reason ?? '';
     document.getElementById('edit-panel-title').textContent = task.title.length > 30 ? task.title.slice(0, 30) + '…' : task.title;
 
     // Entity

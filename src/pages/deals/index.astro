@@ -96,6 +96,10 @@ const query = supabase
 if (stageFilter !== 'all') query.eq('pipeline_stage', stageFilter);
 const { data: deals } = await query;
 
+// Поля агента по угоді (таск 1dcedada): наступний дотик, дотики без відповіді, пауза.
+const { data: agentStates } = await (supabase as any).from('deal_agent_state').select('*');
+const agentState = new Map<string, any>((agentStates ?? []).map((s: any) => [s.project_id, s]));
+
 const { data: buyers } = await supabase.from('buyers').select('id, name, compensation_model, cooperation_model_value').order('name');
 const { data: operators } = await supabase.from('operators').select('id, name, deal_type, cpa_value, revshare_pct, spend_pct').order('name');
 
@@ -363,6 +367,7 @@ const dealTypeLabel: Record<string, string> = { CPA: 'CPA', RevShare: 'RevShare'
         };
         const currentStep = stageOrder[stage] ?? -1;
         const isFailed = stage === 'no_deal';
+        const agent = agentState.get(deal.id) ?? {};
 
         return (
           <div class="deal-card bg-card rounded-xl border border-border hover:border-accent/20 transition-colors" draggable="true" data-id={deal.id}>
@@ -413,6 +418,16 @@ const dealTypeLabel: Record<string, string> = { CPA: 'CPA', RevShare: 'RevShare'
                       Net: {net >= 0 ? '+' : ''}{fmt(net)}
                     </span>
                   )}
+                </div>
+
+                <!-- Agent: next touch, unanswered touches, pause -->
+                <div class="deal-agent-strip flex items-center gap-4 mt-2 text-xs flex-wrap" data-id={deal.id}>
+                  <span class="text-gray-500">Наступний дотик: <span class="agent-next text-gray-300 font-mono" data-at={agent.next_touch_at ?? ''}>—</span></span>
+                  <span class="text-gray-500" title="Наші повідомлення після останньої відповіді партнера в прив'язаних чатах">
+                    Дотиків без відповіді: <span class={`agent-unanswered font-mono ${agent.unanswered_touches > 0 ? 'text-warning' : 'text-gray-300'}`}>{agent.unanswered_touches ?? 0}</span>
+                  </span>
+                  <button type="button" class="agent-pause-btn px-2 py-0.5 rounded border transition-colors" data-id={deal.id} data-paused={agent.agent_paused ? 'true' : 'false'}></button>
+                  {!agent.linked_chats && <span class="text-gray-700">чатів не прив'язано</span>}
                 </div>
 
                 <!-- Progress bar -->
@@ -470,8 +485,29 @@ const dealTypeLabel: Record<string, string> = { CPA: 'CPA', RevShare: 'RevShare'
               </button>
             </div>
 
-            <!-- Expandable: update actuals + delete -->
+            <!-- Expandable: details (actuals, files, reports) | conversation -->
             <div id={`expand-${deal.id}`} class="hidden border-t border-border p-5">
+              <div class="flex gap-1 mb-4 border-b border-border/50">
+                <button type="button" class="deal-tab text-sm px-3 py-1.5 -mb-px border-b-2 border-accent text-gray-100" data-deal={deal.id} data-tab="details">Деталі</button>
+                <button type="button" class="deal-tab text-sm px-3 py-1.5 -mb-px border-b-2 border-transparent text-gray-500 hover:text-gray-300" data-deal={deal.id} data-tab="conversation">Розмова</button>
+              </div>
+
+              <div class="deal-tab-panel" data-deal={deal.id} data-tab="conversation" hidden>
+                <div class="conv-chats text-xs text-gray-500 mb-3"></div>
+                <div class="conv-list max-h-[520px] overflow-y-auto space-y-2 pr-1"></div>
+                <p class="conv-status text-[11px] text-gray-700 mt-2"></p>
+              </div>
+
+              <div class="deal-tab-panel" data-deal={deal.id} data-tab="details">
+              <!-- Agent: next touch -->
+              <div class="flex items-end gap-3 mb-4 pb-4 border-b border-border/40 flex-wrap">
+                <div>
+                  <label class="block text-xs text-gray-500 mb-1">Наступний дотик</label>
+                  <input type="datetime-local" class="agent-next-input bg-card-2 border border-border rounded-lg px-3 py-1.5 text-sm text-gray-200 focus:border-accent outline-none" data-id={deal.id} data-at={agent.next_touch_at ?? ''} />
+                </div>
+                <button type="button" class="agent-next-save bg-card-2 hover:bg-accent hover:text-white border border-border text-sm text-gray-300 px-3 py-1.5 rounded-lg transition-colors" data-id={deal.id}>Зберегти</button>
+                <button type="button" class="agent-next-clear text-xs text-gray-500 hover:text-gray-300 px-2 py-1.5" data-id={deal.id}>Очистити</button>
+              </div>
               <!-- Delete form lives outside the actuals form to avoid nesting -->
               <form method="POST" id={`delete-form-${deal.id}`}>
                 <input type="hidden" name="_action" value="delete" />
@@ -630,6 +666,7 @@ const dealTypeLabel: Record<string, string> = { CPA: 'CPA', RevShare: 'RevShare'
                   📊 Open Daily Reports
                 </a>
                 <span class="text-xs text-gray-700 ml-3">Excel-style reports per day/week/month</span>
+              </div>
               </div>
             </div>
           </div>
@@ -894,4 +931,206 @@ const dealTypeLabel: Record<string, string> = { CPA: 'CPA', RevShare: 'RevShare'
       });
     });
   }
+</script>
+
+<script>
+  // ── Агент по угоді (таск 1dcedada): наступний дотик, пауза, вкладка «Розмова» ─────────────
+  type State = { project_id: string; next_touch_at: string | null; agent_paused: boolean; unanswered_touches: number; linked_chats: number };
+  type Item = { key: string; kind: 'message' | 'draft' | 'note'; at: string; chat?: string | null; side?: string | null; author?: string | null; outgoing?: boolean; text: string; media?: string | null; status?: string; why?: string | null };
+
+  const POLL_MS = 5000;
+  const esc = (s: unknown) => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  const fmtAt = (iso: string | null) => (iso ? new Date(iso).toLocaleString('uk-UA', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) : '—');
+  // ISO → значення для <input type="datetime-local"> у часовому поясі браузера
+  const toLocalInput = (iso: string | null) => {
+    if (!iso) return '';
+    const d = new Date(iso);
+    return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+  };
+  const q = <T extends Element>(sel: string, root: ParentNode = document) => root.querySelector<T>(sel);
+  const qa = <T extends Element>(sel: string, root: ParentNode = document) => [...root.querySelectorAll<T>(sel)];
+
+  function toast(text: string) {
+    const t = document.getElementById('copy-toast');
+    if (!t) return;
+    t.textContent = text;
+    t.style.opacity = '1';
+    setTimeout(() => (t.style.opacity = '0'), 2500);
+  }
+
+  function paintPause(btn: HTMLElement, paused: boolean) {
+    btn.dataset.paused = String(paused);
+    btn.textContent = paused ? '⏸ Пауза агента: увімкнено' : '▶ Пауза агента: вимкнено';
+    btn.className = `agent-pause-btn px-2 py-0.5 rounded border transition-colors ${paused ? 'bg-warning/20 text-warning border-warning/40' : 'text-gray-500 border-border hover:text-gray-300'}`;
+    btn.title = paused ? 'Агент по цій угоді мовчить. Натисніть, щоб зняти паузу.' : 'Натисніть, щоб агент по цій угоді замовк.';
+  }
+
+  function applyState(s: State | null) {
+    if (!s) return;
+    const strip = q<HTMLElement>(`.deal-agent-strip[data-id="${s.project_id}"]`);
+    if (!strip) return;
+    const next = q<HTMLElement>('.agent-next', strip)!;
+    next.dataset.at = s.next_touch_at ?? '';
+    next.textContent = fmtAt(s.next_touch_at);
+    const un = q<HTMLElement>('.agent-unanswered', strip)!;
+    un.textContent = String(s.unanswered_touches ?? 0);
+    un.className = `agent-unanswered font-mono ${s.unanswered_touches > 0 ? 'text-warning' : 'text-gray-300'}`;
+    paintPause(q<HTMLElement>('.agent-pause-btn', strip)!, !!s.agent_paused);
+  }
+
+  async function saveAgent(id: string, patch: Record<string, unknown>) {
+    const res = await fetch('/api/deal-agent', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id, ...patch }) });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) { alert(data.error ?? 'Не вдалося зберегти'); return null; }
+    applyState(data.state);
+    return data.state as State;
+  }
+
+  qa<HTMLElement>('.agent-next').forEach((el) => (el.textContent = fmtAt(el.dataset.at || null)));
+  qa<HTMLInputElement>('.agent-next-input').forEach((el) => (el.value = toLocalInput(el.dataset.at || null)));
+  qa<HTMLElement>('.agent-pause-btn').forEach((btn) => {
+    paintPause(btn, btn.dataset.paused === 'true');
+    btn.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      const paused = btn.dataset.paused !== 'true';
+      btn.setAttribute('disabled', '');
+      if (await saveAgent(btn.dataset.id!, { agent_paused: paused })) toast(paused ? '⏸ Агент по угоді на паузі' : '▶ Паузу знято');
+      btn.removeAttribute('disabled');
+    });
+  });
+  qa<HTMLButtonElement>('.agent-next-save').forEach((btn) => btn.addEventListener('click', async () => {
+    const input = q<HTMLInputElement>(`.agent-next-input[data-id="${btn.dataset.id}"]`)!;
+    if (!input.value) { alert('Вкажіть дату й час'); return; }
+    if (await saveAgent(btn.dataset.id!, { next_touch_at: new Date(input.value).toISOString() })) toast('✓ Наступний дотик збережено');
+  }));
+  qa<HTMLButtonElement>('.agent-next-clear').forEach((btn) => btn.addEventListener('click', async () => {
+    if (await saveAgent(btn.dataset.id!, { next_touch_at: null })) {
+      q<HTMLInputElement>(`.agent-next-input[data-id="${btn.dataset.id}"]`)!.value = '';
+      toast('✓ Наступний дотик очищено');
+    }
+  }));
+
+  // ── Вкладки ──
+  const conv = new Map<string, { cursor: string | null; keys: Set<string>; timer: number | null; busy: boolean }>();
+
+  function showTab(deal: string, tab: string) {
+    qa<HTMLElement>(`.deal-tab[data-deal="${deal}"]`).forEach((b) => {
+      const on = b.dataset.tab === tab;
+      b.className = `deal-tab text-sm px-3 py-1.5 -mb-px border-b-2 ${on ? 'border-accent text-gray-100' : 'border-transparent text-gray-500 hover:text-gray-300'}`;
+    });
+    qa<HTMLElement>(`.deal-tab-panel[data-deal="${deal}"]`).forEach((p) => (p.hidden = p.dataset.tab !== tab));
+    if (tab === 'conversation') openConversation(deal);
+    else stopPolling(deal);
+  }
+  qa<HTMLElement>('.deal-tab').forEach((b) => b.addEventListener('click', () => showTab(b.dataset.deal!, b.dataset.tab!)));
+
+  // ── Розмова ──
+  const sideLabel: Record<string, string> = { buyer: 'баєр', operator: 'оператор' };
+  const mediaLabel: Record<string, string> = { photo: 'фото', video: 'відео', voice: 'голосове', document: 'файл', sticker: 'стікер', other: 'вкладення' };
+  const draftStatus: Record<string, string> = { draft: 'чернетка', approved: 'погоджено', discarded: 'відхилено', sent: 'надіслано' };
+
+  function itemHtml(i: Item) {
+    if (i.kind === 'note') {
+      return `<div class="conv-item border border-border/60 bg-card-2/50 rounded-lg px-3 py-2" data-key="${esc(i.key)}" data-at="${esc(i.at)}">
+        <div class="text-[11px] text-gray-500 mb-0.5">📝 Нотатка агента · ${fmtAt(i.at)}</div>
+        <div class="text-sm text-gray-400 italic whitespace-pre-wrap">${esc(i.text)}</div></div>`;
+    }
+    if (i.kind === 'draft') {
+      return `<div class="conv-item border border-dashed border-warning/40 bg-warning/5 rounded-lg px-3 py-2 ml-10" data-key="${esc(i.key)}" data-at="${esc(i.at)}">
+        <div class="text-[11px] text-warning/80 mb-0.5">✎ Чернетка агента (${esc(draftStatus[i.status ?? ''] ?? i.status)})${i.chat ? ` · ${esc(i.chat)}` : ''} · ${fmtAt(i.at)}</div>
+        <div class="text-sm text-gray-200 whitespace-pre-wrap">${esc(i.text)}</div>
+        ${i.why ? `<div class="text-[11px] text-gray-500 mt-1">Чому: ${esc(i.why)}</div>` : ''}</div>`;
+    }
+    const media = i.media ? `<span class="text-[11px] text-gray-500">[${esc(mediaLabel[i.media] ?? i.media)}]</span> ` : '';
+    return `<div class="conv-item flex ${i.outgoing ? 'justify-end' : ''}" data-key="${esc(i.key)}" data-at="${esc(i.at)}">
+      <div class="max-w-[80%] rounded-lg px-3 py-2 ${i.outgoing ? 'bg-accent/15 border border-accent/20' : 'bg-card-2 border border-border'}">
+        <div class="text-[11px] text-gray-500 mb-0.5">${esc(i.outgoing ? 'Ми' : i.author ?? '—')}${i.chat ? ` · ${esc(i.chat)}` : ''}${i.side ? ` (${esc(sideLabel[i.side] ?? i.side)})` : ''} · ${fmtAt(i.at)}</div>
+        <div class="text-sm text-gray-200 whitespace-pre-wrap break-words">${media}${esc(i.text)}</div>
+      </div></div>`;
+  }
+
+  function insertItems(deal: string, items: Item[]) {
+    const s = conv.get(deal)!;
+    const panel = q<HTMLElement>(`.deal-tab-panel[data-deal="${deal}"][data-tab="conversation"]`)!;
+    const list = q<HTMLElement>('.conv-list', panel)!;
+    const nearBottom = list.scrollHeight - list.scrollTop - list.clientHeight < 80;
+    let added = 0;
+    for (const i of items) {
+      if (s.keys.has(i.key)) continue;
+      s.keys.add(i.key);
+      added++;
+      const html = itemHtml(i);
+      // по порядку часу: новий рядок може бути й старішим (слухач дочитав пропущене)
+      const after = qa<HTMLElement>('.conv-item', list).reverse().find((el) => Date.parse(el.dataset.at!) <= Date.parse(i.at));
+      if (after) after.insertAdjacentHTML('afterend', html);
+      else list.insertAdjacentHTML('afterbegin', html);
+    }
+    q('.conv-empty', list)?.remove();
+    if (!s.keys.size) list.innerHTML = '<p class="conv-empty text-sm text-gray-600">Повідомлень ще немає.</p>';
+    if (added && nearBottom) list.scrollTop = list.scrollHeight;
+    return added;
+  }
+
+  async function fetchConversation(deal: string) {
+    const s = conv.get(deal)!;
+    if (s.busy || document.hidden) return;
+    s.busy = true;
+    const panel = q<HTMLElement>(`.deal-tab-panel[data-deal="${deal}"][data-tab="conversation"]`)!;
+    const status = q<HTMLElement>('.conv-status', panel)!;
+    try {
+      const res = await fetch(`/api/deal-conversation?deal=${deal}${s.cursor ? `&after=${encodeURIComponent(s.cursor)}` : ''}`);
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? res.status);
+      const first = s.cursor === null && s.keys.size === 0;
+      if (first) {
+        const chats = q<HTMLElement>('.conv-chats', panel)!;
+        chats.innerHTML = data.chats.length
+          ? 'Чати: ' + data.chats.map((c: any) => `<span class="text-gray-300">${esc(c.title ?? c.chat_id)}</span> (${esc(sideLabel[c.side] ?? c.side)})`).join(', ')
+          : 'Чатів не прив\'язано. Прив\'яжіть Telegram-чат у картці баєра чи оператора — розмова з\'явиться тут.';
+        if (data.truncated) chats.innerHTML += ' · показано останні 300 повідомлень';
+      }
+      insertItems(deal, data.items);
+      if (first) { const list = q<HTMLElement>('.conv-list', panel)!; list.scrollTop = list.scrollHeight; }
+      s.cursor = data.cursor ?? s.cursor;
+      applyState(data.state);
+      status.textContent = `Оновлюється сама кожні ${POLL_MS / 1000} с · перевірено ${new Date().toLocaleTimeString('uk-UA')}`;
+    } catch (e: any) {
+      status.textContent = `Не вдалося оновити (${e.message}), повторю за ${POLL_MS / 1000} с`;
+    } finally {
+      s.busy = false;
+    }
+  }
+
+  function openConversation(deal: string) {
+    if (!conv.has(deal)) conv.set(deal, { cursor: null, keys: new Set(), timer: null, busy: false });
+    const s = conv.get(deal)!;
+    fetchConversation(deal);
+    if (s.timer === null) {
+      s.timer = window.setInterval(() => {
+        // панель згорнули — більше не опитуємо
+        if (document.getElementById(`expand-${deal}`)?.classList.contains('hidden')) return stopPolling(deal);
+        fetchConversation(deal);
+      }, POLL_MS);
+    }
+  }
+
+  function stopPolling(deal: string) {
+    const s = conv.get(deal);
+    if (s?.timer != null) { clearInterval(s.timer); s.timer = null; }
+  }
+
+  // Повернулися до розгорнутої угоди з відкритою «Розмовою» — опитування відновлюється.
+  qa<HTMLElement>('.expand-btn').forEach((btn) => btn.addEventListener('click', () => {
+    const deal = btn.dataset.id!;
+    const open = !document.getElementById(`expand-${deal}`)?.classList.contains('hidden');
+    const convPanel = q<HTMLElement>(`.deal-tab-panel[data-deal="${deal}"][data-tab="conversation"]`);
+    if (open && convPanel && !convPanel.hidden) openConversation(deal);
+  }));
+
+  // Виділити й скопіювати текст у розмові: картка вся перетягується, тож на час виділення вимикаємо.
+  qa<HTMLElement>('.conv-list').forEach((list) => {
+    const card = list.closest<HTMLElement>('.deal-card');
+    list.addEventListener('mousedown', () => card && (card.draggable = false));
+    document.addEventListener('mouseup', () => card && (card.draggable = true));
+  });
 </script>

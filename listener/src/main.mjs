@@ -1,7 +1,8 @@
 // BizDev-слухач (таск 140108c8, BizDev-агент · 2/8): робочий Telegram-акаунт → bizdev-db.
 //
-// - Читає лише дозволені чати (BIZDEV_TG_ALLOWED_CHATS). Повідомлення з будь-якого
-//   іншого чату відкидається першим рядком обробника: ні тексту, ні назви чату в базі.
+// - Читає лише дозволені чати: прив'язані до карток баєрів і операторів у порталі (tg_chat_links,
+//   таск 1dcedada) і, поки його не очистять, старий список BIZDEV_TG_ALLOWED_CHATS. Повідомлення
+//   з будь-якого іншого чату відкидається першим рядком обробника: ні тексту, ні назви чату в базі.
 // - Нічого не надсилає: клієнт обгорнуто guard.mjs, дозволені лише вхід і читання.
 // - У базу йде замаскований текст (mask.mjs); медіа не завантажуються.
 // - Сесія Telegram і ключ застосунку — файлом на томі /data, поза git і поза базою.
@@ -17,10 +18,12 @@ import { makeReadOnly } from './guard.mjs';
 import * as store from './store.mjs';
 import { readJson, writeJson, removeFile } from './files.mjs';
 import { loadPult, pultStatus, configurePult, rebindPult, forgetPult, notifyOwner } from './pult.mjs';
+import { parseChatIds, mergeAllowed } from './allowed.mjs';
 
-const ALLOWED = new Set(
-  (process.env.BIZDEV_TG_ALLOWED_CHATS ?? '').split(/[\s,]+/).filter(Boolean).map((s) => String(BigInt(s))),
-);
+const ENV_CHATS = parseChatIds(process.env.BIZDEV_TG_ALLOWED_CHATS);
+let allowedFrom = mergeAllowed(ENV_CHATS, []); // id → 'card' | 'env' | 'card+env'
+let ALLOWED = new Set(allowedFrom.keys());
+const ALLOWED_REFRESH_MS = 60_000;
 const FIRST_HISTORY = Number(process.env.BIZDEV_TG_FIRST_HISTORY ?? 500);
 const CATCHUP_MS = 2 * 60_000;
 const SESSION_FILE = 'tg-session.json';
@@ -312,6 +315,23 @@ async function inputPeers() {
   return peers;
 }
 
+/**
+ * Перечитати прив'язки з бази. Якщо база недоступна — лишається попередній список:
+ * ні розширити, ні обнулити його збій не може. Нові чати одразу дочитуються.
+ */
+async function refreshAllowed() {
+  const next = mergeAllowed(ENV_CHATS, await store.linkedChatIds());
+  const added = [...next.keys()].filter((id) => !ALLOWED.has(id));
+  const removed = [...ALLOWED].filter((id) => !next.has(id));
+  allowedFrom = next;
+  ALLOWED = new Set(next.keys());
+  if (added.length || removed.length) {
+    log(`[allowed] +${added.length} −${removed.length}, всього ${ALLOWED.size}`);
+    if (added.length) catchUp().catch((e) => log('[catchup]', e.message));
+  }
+  return { added: added.length, removed: removed.length, total: ALLOWED.size };
+}
+
 let catching = false;
 async function catchUp() {
   if (!client || catching || !ALLOWED.size) return;
@@ -357,6 +377,7 @@ async function logout() {
 }
 
 async function boot() {
+  await refreshAllowed().catch((e) => log('[allowed]', e.message));
   await loadPult(async () => (client ? `Акаунт підключено: ${accountLine()}. Дозволених чатів: ${ALLOWED.size}.` : 'Акаунт не підключено.'));
   const saved = await readJson(SESSION_FILE);
   if (!saved?.session) return;
@@ -377,7 +398,7 @@ async function status() {
   let allowed = [];
   try {
     const stats = new Map((await store.chatStats([...ALLOWED])).map((r) => [r.id, r]));
-    allowed = [...ALLOWED].map((id) => ({ id, title: null, messages: 0, lastAt: null, ...(stats.get(id) ?? {}) }));
+    allowed = [...ALLOWED].map((id) => ({ id, title: null, messages: 0, lastAt: null, source: allowedFrom.get(id), ...(stats.get(id) ?? {}) }));
   } catch (e) {
     lastError ??= 'Database is unavailable.';
   }
@@ -408,7 +429,9 @@ const routes = {
   'POST /pult': async (b) => { await configurePult(b.token); return status(); },
   'POST /pult/rebind': async () => { await rebindPult(); return status(); },
   'POST /pult/forget': async () => { await forgetPult(); return status(); },
-  // Для налаштування BIZDEV_TG_ALLOWED_CHATS: лише id, тип і назва — без повідомлень.
+  // Портал щойно прив'язав чи відв'язав чат у картці — не чекати хвилину.
+  'POST /reload': refreshAllowed,
+  // Для вибору чату в картці баєра чи оператора: лише id, тип і назва — без повідомлень.
   'GET /dialogs': async () => {
     if (!client) throw new Error('The account is not connected.');
     const out = [];
@@ -431,4 +454,5 @@ http.createServer(async (req, res) => {
 }).listen(PORT, () => log(`[http] :${PORT}`));
 
 setInterval(() => catchUp().catch(() => {}), CATCHUP_MS);
+setInterval(() => refreshAllowed().catch((e) => log('[allowed]', e.message)), ALLOWED_REFRESH_MS);
 boot().catch((e) => log('[boot]', e.message));

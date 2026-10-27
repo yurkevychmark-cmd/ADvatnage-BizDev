@@ -16,6 +16,7 @@ function make() {
     const rest = new PostgrestClient(restUrl);
     return {
       from: (table: string) => rest.from(table),
+      rpc: (fn: string, args?: Record<string, unknown>) => rest.rpc(fn, args),
       storage: { from: (bucket: string) => localBucket(bucket) },
     } as unknown as ReturnType<typeof createClient>;
   }
